@@ -1,7 +1,7 @@
-from typing import list, Optional
+from typing import List, Optional
 from enum import IntEnum
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 app = FastAPI()
@@ -13,7 +13,7 @@ class Priority(IntEnum):
     
 class TodoBase(BaseModel):
     todo_name: str = Field(..., min_length=3, max_length=512, description="The name of the todo")
-    todo_description = str = Field(..., description="The description of the todo")
+    todo_description: str = Field(..., description="The description of the todo")
     priority: Priority = Field(default = Priority.LOW, description="The priority of the todo")
     
 class TodoCreate(TodoBase):
@@ -40,14 +40,15 @@ def todo(todo_id: int):
     for todo in all_todos:
         if todo.todo_id == todo_id:
             return todo
-    return {"result" : "Not found"}
+        
+    raise HTTPException(status_code=404, detail="Error: Not found")
 
 @app.get("/todos", response_model=list[Todo])
 def todos(first_n : int = None):
     if first_n:
-        return {"result" : all_todos[:first_n]}
+        return all_todos[:first_n]
     else:
-        return {"result" : all_todos}
+        return all_todos
 
 @app.post("/todos", response_model=Todo)
 def create_todo(todo: TodoCreate):
@@ -59,8 +60,10 @@ def create_todo(todo: TodoCreate):
         todo_description=todo.todo_description,
         priority=todo.priority
     )
+    
     all_todos.append(new_todo)
-    return {"result": "Added successfully", "new_todo": new_todo}
+    
+    return new_todo
 
 @app.put("/todos/{todo_id}", response_model=Todo)
 def update_todo(todo_id: int, updated_todo: TodoUpdate):
@@ -69,13 +72,15 @@ def update_todo(todo_id: int, updated_todo: TodoUpdate):
             todo.todo_name = updated_todo.todo_name
             todo.todo_description = updated_todo.todo_description
             todo.priority = updated_todo.priority
-            return {"result": "Updated successfully", "todo": todo}
-    return {"result": "Error: Not found"}
+            return todo
+    
+    raise HTTPException(status_code= 404, detail="Error: Not found")
 
-@app.delete("/todos/{todo_id}")
+@app.delete("/todos/{todo_id}", response_model=Todo)
 def delete_todo(todo_id: int):
     for index, todo in enumerate(all_todos):
         if todo.todo_id == todo_id:
             all_todos.pop(index)
-            return {"result": "Deleted successfully"}
-    return {"result": "Error: Not found"}
+            return delete_todo
+    
+    raise HTTPException(status_code=404, detail="Error: Not found")
