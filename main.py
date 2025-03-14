@@ -47,4 +47,12 @@ def update_todo(todo_id: int, updated_todo: dict):
         if todo["todo_id"] == todo_id:
             todo["todo_name"] = updated_todo["todo_name"]
             return {"result": "Updated successfully", "todo": todo}
-    return {"result": "Not found"}
+    return {"result": "Error: Not found"}
+
+@app.delete("/todos/{todo_id}")
+def delete_todo(todo_id: int):
+    for index, todo in enumerate(all_todos):
+        if todo["todo_id"] == todo_id:
+            all_todos.pop(index)
+            return {"result": "Deleted successfully"}
+    return {"result": "Error: Not found"}
