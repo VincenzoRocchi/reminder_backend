@@ -22,6 +22,6 @@ A simple and easy reminder app deployed on mobile and desktop platforms. This ap
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the MIT License. See the [LICENSE](license.txt) file for more details.
 
 Stay tuned for more updates and features!
