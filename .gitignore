@@ -9,7 +9,7 @@ wheels/
 pyproject.toml
 uv.lock
 tempCodeRunnerFile.py
-
+.env
 
 # Virtual environments
 .venv
