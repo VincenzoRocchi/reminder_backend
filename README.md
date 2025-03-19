@@ -29,7 +29,7 @@ A comprehensive backend system for businesses to manage and send reminders to th
 
 ## Project Structure
 
-```
+```plaintext
 reminder_app/
 ├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
