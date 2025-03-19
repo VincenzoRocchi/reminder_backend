@@ -77,4 +77,4 @@ Each business using the platform will have their own account within the applicat
 
 ## License
 
-[MIT](LICENSE)
+[MIT](license.txt)
