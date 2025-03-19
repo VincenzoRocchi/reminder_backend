@@ -113,22 +113,45 @@ class Business(Base):
     
     @twilio_auth_token.setter
     def twilio_auth_token(self, value: Optional[str]) -> None:
-        """
-        Set Twilio auth token, encrypting it before storage
-        
-        Args:
-            value: Plain text token to encrypt and store
-        """
+    """
+    Sets and encrypts Twilio auth token with validation
+    
+    Args:
+        value: Plain text token (must be 32 chars starting with 'SK')
+    
+    Raises:
+        ValueError: For invalid token format
+        EncryptionError: For encryption failures
+    """
+    if value:
+        # Validazione formato Twilio
+        if len(value) != 32 or not value.startswith('SK'):
+            raise ValueError(
+                "Invalid Twilio Auth Token format. "
+                "Must be 32 characters starting with 'SK'"
+            )
+    
+    original_value = self._twilio_auth_token
+    
+    try:
         if value is None:
             self._twilio_auth_token = None
         else:
-            try:
-                self._twilio_auth_token = encryption_service.encrypt_string(str(value))
-            except Exception as e:
-                import logging
-                logging.error(f"Failed to encrypt twilio_auth_token for business {self.id}: {str(e)}")
-                self._twilio_auth_token = None
-                raise ValueError("Failed to encrypt sensitive data") from e
+            self._twilio_auth_token = encryption_service.encrypt_string(value)
+            
+            # Audit log
+            logging.info(
+                f"Twilio token updated for business {self.id} | "
+                f"At: {datetime.datetime.utcnow().isoformat()}"
+            )
+            
+    except Exception as e:
+        self._twilio_auth_token = original_value  # Rollback
+        logging.error(
+            f"Encryption failure | Biz:{self.id} | "
+            f"Error:{type(e).__name__} | TraceID:{uuid.uuid4()}"
+        )
+        raise EncryptionError("Secure storage failed") from e
     
     @property
     def whatsapp_api_key(self) -> Optional[str]:
