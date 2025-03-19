@@ -8,7 +8,7 @@ wheels/
 #.python-version
 #pyproject.toml
 #uv.lock
-#tempCodeRunnerFile.py
+tempCodeRunnerFile.py
 
 
 # Virtual environments
