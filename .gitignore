@@ -9,6 +9,7 @@ wheels/
 #pyproject.toml
 #uv.lock
 tempCodeRunnerFile.py
+tempCodeRunnerFile.python
 dbtest.py
 psw.txt
 
