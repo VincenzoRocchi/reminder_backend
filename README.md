@@ -43,28 +43,13 @@ reminder_app/
 ├── alembic/                   # Database migrations
 ├── app/                       # Main application package
 │   ├── api/                   # API endpoints
-│   │   ├── auth.py            # Authentication endpoints
-│   │   ├── businesses.py      # Business management endpoints
-│   │   ├── clients.py         # Client management endpoints
-│   │   ├── reminders.py       # Reminder configuration endpoints
-│   │   ├── notifications.py   # Notification history endpoints
-│   │   └── payments.py        # Payment integration endpoints
 │   ├── core/                  # Core functionality
-│   │   ├── config.py          # Application configuration
-│   │   ├── security.py        # Security utilities (JWT)
-│   │   └── errors.py          # Error handling
 │   ├── models/                # Database models
-│   │   ├── business.py        # Business model
-│   │   ├── client.py          # Client model
-│   │   ├── reminder.py        # Reminder model
-│   │   ├── notification.py    # Notification model
-│   │   └── payment.py         # Payment model
 │   ├── schemas/               # Pydantic schemas
 │   └── services/              # External services integration
 │       ├── email_service.py   # Email notification service
 │       ├── sms_service.py     # SMS notification service
 │       ├── whatsapp_service.py # WhatsApp notification service
-│       ├── payment_service.py  # Stripe payment integration
 │       └── scheduler_service.py # APScheduler integration for reminders
 ├── scripts/                   # Utility scripts
 └── tests/                     # Test suite
