@@ -29,7 +29,7 @@ A comprehensive backend system for businesses to manage and send reminders to th
 
 ## Project Structure
 
-```plaintext
+```
 reminder_app/
 ├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
@@ -75,6 +75,73 @@ Each business using the platform will have their own account within the applicat
 - SMTP server (for Email)
 - WhatsApp Business API access
 
+### Installation
+
+1. Clone the repository
+2. Create a virtual environment:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+4. Copy `.env.example` to `.env` and configure environment variables
+5. Run database migrations:
+   ```
+   alembic upgrade head
+   ```
+
+### Running the Application
+
+#### Development Mode
+
+```
+python main.py
+```
+
+or 
+
+```
+uvicorn app.main:app --reload
+```
+
+#### Using Docker
+
+```
+docker-compose up
+```
+
+## API Documentation
+
+Once the application is running, access the API documentation at:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+## Testing
+
+Run tests with pytest:
+
+```
+pytest
+```
+
+## Database Migrations
+
+Create a new migration:
+
+```
+alembic revision --autogenerate -m "Description of changes"
+```
+
+Apply migrations:
+
+```
+alembic upgrade head
+```
+
 ## License
 
-[MIT](license.txt)
+[MIT](LICENSE)
