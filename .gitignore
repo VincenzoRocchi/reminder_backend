@@ -14,4 +14,4 @@ dbtest.py
 psw.txt
 
 # Virtual environments
-#.venv
+.venv
