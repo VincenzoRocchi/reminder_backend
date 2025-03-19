@@ -1,15 +1,17 @@
 # Reminder App
 
-A comprehensive backend system for businesses to manage and send reminders to their users via email, SMS, and WhatsApp.
+A comprehensive backend system for businesses (such as accounting firms) to manage and send reminders to their clients via email, SMS, and WhatsApp, with integrated payment capabilities.
 
 ## Features
 
-- **User Management**: Register, authenticate, and manage users
-- **Business Management**: Create and manage businesses
-- **Reminder System**: Set up one-time or recurring reminders
+- **User & Client Management**: Register, authenticate, and manage business users and their clients
+- **Business Management**: Create and manage business accounts with customized settings
+- **Reminder System**: Set up one-time or recurring reminders with different types (deadlines, payments, etc.)
 - **Multi-channel Notifications**: Send reminders via email, SMS, or WhatsApp
-- **Scheduling**: Automated reminder delivery at specified times
-- **Business-specific Settings**: Each business can configure their own notification channels
+- **Scheduling**: Automated reminder delivery at specified times with manual trigger option
+- **Payment Integration**: Include payment links (Stripe) in reminders for easy client transactions
+- **Dashboard & Analytics**: Monitor notification history and payment status
+- **Error Handling**: Robust error handling for notification delivery and payment processing
 
 ## Technology Stack
 
@@ -20,6 +22,7 @@ A comprehensive backend system for businesses to manage and send reminders to th
 | **ORM** | SQLAlchemy |
 | **Migrations** | Alembic |
 | **Notifications** | SMTP (Email), Twilio (SMS), WhatsApp Business API |
+| **Payment Processing** | Stripe API |
 | **Deployment** | Docker + AWS EC2/ECS |
 | **Load Balancing** | AWS Application Load Balancer |
 | **Task Scheduling** | APScheduler (integrated in application) |
@@ -40,13 +43,28 @@ reminder_app/
 ├── alembic/                   # Database migrations
 ├── app/                       # Main application package
 │   ├── api/                   # API endpoints
+│   │   ├── auth.py            # Authentication endpoints
+│   │   ├── businesses.py      # Business management endpoints
+│   │   ├── clients.py         # Client management endpoints
+│   │   ├── reminders.py       # Reminder configuration endpoints
+│   │   ├── notifications.py   # Notification history endpoints
+│   │   └── payments.py        # Payment integration endpoints
 │   ├── core/                  # Core functionality
+│   │   ├── config.py          # Application configuration
+│   │   ├── security.py        # Security utilities (JWT)
+│   │   └── errors.py          # Error handling
 │   ├── models/                # Database models
+│   │   ├── business.py        # Business model
+│   │   ├── client.py          # Client model
+│   │   ├── reminder.py        # Reminder model
+│   │   ├── notification.py    # Notification model
+│   │   └── payment.py         # Payment model
 │   ├── schemas/               # Pydantic schemas
 │   └── services/              # External services integration
 │       ├── email_service.py   # Email notification service
 │       ├── sms_service.py     # SMS notification service
 │       ├── whatsapp_service.py # WhatsApp notification service
+│       ├── payment_service.py  # Stripe payment integration
 │       └── scheduler_service.py # APScheduler integration for reminders
 ├── scripts/                   # Utility scripts
 └── tests/                     # Test suite
@@ -54,7 +72,7 @@ reminder_app/
 
 ## Deployment Architecture
 
-The Reminder App is designed to be deployed as a centralized service that can manage multiple businesses and their users. The deployment architecture includes:
+The Reminder App is designed to be deployed as a centralized service that can manage multiple businesses and their clients. The deployment architecture includes:
 
 - **App Server**: AWS EC2 or ECS for hosting the FastAPI application
 - **Database**: AWS RDS MySQL for data persistence
@@ -62,7 +80,25 @@ The Reminder App is designed to be deployed as a centralized service that can ma
 - **Monitoring**: AWS CloudWatch for logs and metrics
 - **Networking**: VPC configuration for security
 
-Each business using the platform will have their own account within the application but will use the same centralized infrastructure.
+Each business using the platform (such as accounting firms) will have their own account within the application but will use the same centralized infrastructure.
+
+## User Workflow
+
+1. **Business Setup**: Businesses register and configure their notification preferences
+2. **Client Management**: Businesses import or manually add their clients
+3. **Reminder Configuration**: Businesses create reminders with specified schedules, messages, and notification channels
+4. **Client Assignment**: Clients are associated with specific reminders
+5. **Notification Delivery**: 
+   - Automated delivery based on schedule
+   - Manual trigger option for immediate delivery
+6. **Client Experience**:
+   - Clients receive notifications via preferred channels
+   - Clients can view documents/invoices via included links
+   - Clients can make payments via Stripe integration
+7. **Monitoring**:
+   - Businesses track notification history
+   - Payment status updates are recorded
+   - Error handling for failed notifications or payments
 
 ## Getting Started
 
@@ -74,6 +110,7 @@ Each business using the platform will have their own account within the applicat
 - Twilio account (for SMS)
 - SMTP server (for Email)
 - WhatsApp Business API access
+- Stripe account (for payment processing)
 
 ### Installation
 
