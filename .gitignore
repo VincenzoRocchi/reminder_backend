@@ -9,7 +9,8 @@ wheels/
 #pyproject.toml
 #uv.lock
 tempCodeRunnerFile.py
-
+dbtest.py
+psw.txt
 
 # Virtual environments
 #.venv
