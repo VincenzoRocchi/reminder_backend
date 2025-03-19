@@ -5,11 +5,12 @@ build/
 dist/
 wheels/
 *.egg-info
-.python-version
-pyproject.toml
-uv.lock
+#.python-version
+#pyproject.toml
+#uv.lock
 tempCodeRunnerFile.py
-.env
+dbtest.py
+psw.txt
 
 # Virtual environments
-.venv
+#.venv
