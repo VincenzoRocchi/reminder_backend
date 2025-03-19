@@ -9,6 +9,7 @@ dependencies = [
     "ipykernel>=6.29.5",
     "mysql>=0.0.3",
     "mysql-connector-python>=9.2.0",
+    "mysqlclient>=2.2.7",
     "typing>=3.10.0.0",
     "uvicorn>=0.34.0",
 ]
