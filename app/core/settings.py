@@ -8,12 +8,12 @@ e file .env specifici per ogni ambiente.
 La classe Settings utilizza Pydantic per la validazione e la gestione di tutte
 le configurazioni dell'applicazione.
 """
-from pydantic_settings import BaseSettings  # Gestione configurazioni basata su Pydantic
-from typing import Optional, List  # Tipi di dato per annotazioni
-from pydantic import Field, SecretStr, field_validator, model_validator, ConfigDict  # Strumenti di validazione
-import os  # Accesso alle variabili d'ambiente
-from pathlib import Path  # Gestione percorsi file
-from dotenv import load_dotenv  # Caricamento file .env
+from pydantic_settings import BaseSettings
+from typing import Optional, List
+from pydantic import Field, SecretStr, field_validator, model_validator, ConfigDict
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 # ======================================================================
         # DETERMINAZIONE DELL'AMBIENTE E CARICAMENTO FILE .ENV
@@ -52,23 +52,60 @@ class Settings(BaseSettings):
     # ======================================================================
                             # IMPOSTAZIONI API
     # ======================================================================
-    API_V1_STR: str = "/api/v1"  # Prefisso per le API v1
-    PROJECT_NAME: str = "Reminder App API"  # Nome del progetto
+    API_V1_STR: str = Field(
+        default="/api/v1",
+        description="Prefisso per le API v1"
+    )
+    
+    PROJECT_NAME: str = Field(
+        default="Reminder App API",
+        description="Nome del progetto"
+    )
     
     # ======================================================================
                             # IMPOSTAZIONI DATABASE
     # ======================================================================
     # Parametri di connessione al database MySQL
-    DB_HOST: str = os.getenv("DB_HOST", "localhost")  # Host del database
-    DB_PORT: int = int(os.getenv("DB_PORT", "3306"))  # Porta MySQL standard
-    DB_USER: str = os.getenv("DB_USER", "root")  # Utente del database
-    DB_PASSWORD: str = os.getenv("DB_PASSWORD", "password")  # Password del database
-    DB_NAME: str = os.getenv("DB_NAME", "reminder_app")  # Nome del database
+    DB_HOST: str = Field(
+        default=os.getenv("DB_HOST", "localhost"),
+        description="Host del database"
+    )
+    
+    DB_PORT: int = Field(
+        default=int(os.getenv("DB_PORT", "3306")),
+        description="Porta MySQL standard"
+    )
+    
+    DB_USER: str = Field(
+        default=os.getenv("DB_USER", "root"),
+        description="Utente del database"
+    )
+    
+    DB_PASSWORD: str = Field(
+        default=os.getenv("DB_PASSWORD", "password"),
+        description="Password del database"
+    )
+    
+    DB_NAME: str = Field(
+        default=os.getenv("DB_NAME", "reminder_app"),
+        description="Nome del database"
+    )
     
     # Configurazione del pool di connessioni per migliorare le prestazioni
-    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))  # Dimensione iniziale del pool
-    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))  # Connessioni aggiuntive quando il pool è pieno
-    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))  # Timeout in secondi per ottenere una connessione
+    DB_POOL_SIZE: int = Field(
+        default=int(os.getenv("DB_POOL_SIZE", "5")),
+        description="Dimensione iniziale del pool"
+    )
+    
+    DB_MAX_OVERFLOW: int = Field(
+        default=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+        description="Connessioni aggiuntive quando il pool è pieno"
+    )
+    
+    DB_POOL_TIMEOUT: int = Field(
+        default=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+        description="Timeout in secondi per ottenere una connessione"
+    )
     
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
@@ -90,51 +127,117 @@ class Settings(BaseSettings):
                             # IMPOSTAZIONI SICUREZZA
     # ======================================================================
     # Chiave segreta per la firma dei token JWT
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
+    SECRET_KEY: str = Field(
+        default=os.getenv("SECRET_KEY", "your-secret-key-here"),
+        description="Chiave segreta per la firma dei token JWT"
+    )
+    
     # Algoritmo usato per la firma dei token JWT
-    ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+    ALGORITHM: str = Field(
+        default=os.getenv("ALGORITHM", "HS256"),
+        description="Algoritmo usato per la firma dei token JWT"
+    )
+    
     # Prefisso per l'header Authorization
-    JWT_TOKEN_PREFIX: str = os.getenv("JWT_TOKEN_PREFIX", "Bearer")
+    JWT_TOKEN_PREFIX: str = Field(
+        default=os.getenv("JWT_TOKEN_PREFIX", "Bearer"),
+        description="Prefisso per l'header Authorization"
+    )
     
     # Tempi di scadenza dei token
     # Durata del token di accesso (in minuti)
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")),
+        description="Durata del token di accesso (in minuti)"
+    )
+    
     # Durata del token di refresh (in giorni)
-    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
+        default=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")),
+        description="Durata del token di refresh (in giorni)"
+    )
+    
     # Durata del token di reset password (in minuti)
-    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15"))
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15")),
+        description="Durata del token di reset password (in minuti)"
+    )
     
     # ======================================================================
                             # IMPOSTAZIONI EMAIL
     # ======================================================================
     # Configurazione server SMTP per l'invio di email
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "")  # Host del server SMTP
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))  # Porta SMTP (587 per TLS)
-    SMTP_USER: str = os.getenv("SMTP_USER", "")  # Username SMTP
-    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")  # Password SMTP
-    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "noreply@reminderapp.com")  # Indirizzo mittente
+    SMTP_HOST: str = Field(
+        default=os.getenv("SMTP_HOST", ""),
+        description="Host del server SMTP"
+    )
+    
+    SMTP_PORT: int = Field(
+        default=int(os.getenv("SMTP_PORT", "587")),
+        description="Porta SMTP (587 per TLS)"
+    )
+    
+    SMTP_USER: str = Field(
+        default=os.getenv("SMTP_USER", ""),
+        description="Username SMTP"
+    )
+    
+    SMTP_PASSWORD: str = Field(
+        default=os.getenv("SMTP_PASSWORD", ""),
+        description="Password SMTP"
+    )
+    
+    EMAIL_FROM: str = Field(
+        default=os.getenv("EMAIL_FROM", "noreply@reminderapp.com"),
+        description="Indirizzo mittente"
+    )
     
     # ======================================================================
                             # IMPOSTAZIONI SMS (TWILIO)
     # ======================================================================
     # Credenziali Twilio per l'invio di SMS
-    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")  # SID account Twilio
-    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")  # Token di autenticazione Twilio
-    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")  # Numero di telefono Twilio
+    TWILIO_ACCOUNT_SID: str = Field(
+        default=os.getenv("TWILIO_ACCOUNT_SID", ""),
+        description="SID account Twilio"
+    )
+    
+    TWILIO_AUTH_TOKEN: str = Field(
+        default=os.getenv("TWILIO_AUTH_TOKEN", ""),
+        description="Token di autenticazione Twilio"
+    )
+    
+    TWILIO_PHONE_NUMBER: str = Field(
+        default=os.getenv("TWILIO_PHONE_NUMBER", ""),
+        description="Numero di telefono Twilio"
+    )
     
     # ======================================================================
                             # IMPOSTAZIONI WHATSAPP
     # ======================================================================
     # Credenziali per API WhatsApp Business
-    WHATSAPP_API_KEY: str = os.getenv("WHATSAPP_API_KEY", "")  # Chiave API WhatsApp
-    WHATSAPP_API_URL: str = os.getenv("WHATSAPP_API_URL", "")  # URL endpoint API WhatsApp
+    WHATSAPP_API_KEY: str = Field(
+        default=os.getenv("WHATSAPP_API_KEY", ""),
+        description="Chiave API WhatsApp"
+    )
+    
+    WHATSAPP_API_URL: str = Field(
+        default=os.getenv("WHATSAPP_API_URL", ""),
+        description="URL endpoint API WhatsApp"
+    )
     
     # ======================================================================
                     # IMPOSTAZIONI STRIPE (GATEWAY PAGAMENTI)
     # ======================================================================
     # Credenziali Stripe per processare i pagamenti
-    STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY", "")  # Chiave API Stripe
-    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")  # Segreto webhook Stripe
+    STRIPE_API_KEY: str = Field(
+        default=os.getenv("STRIPE_API_KEY", ""),
+        description="Chiave API Stripe"
+    )
+    
+    STRIPE_WEBHOOK_SECRET: str = Field(
+        default=os.getenv("STRIPE_WEBHOOK_SECRET", ""),
+        description="Segreto webhook Stripe"
+    )
     
     @property
     def PAYMENT_SUCCESS_URL(self) -> str:
@@ -170,7 +273,10 @@ class Settings(BaseSettings):
                             # IMPOSTAZIONI AMBIENTE
     # ======================================================================
     # Ambiente corrente (development, testing, production)
-    ENV: str = ENV  # Usa il valore ENV determinato a livello di modulo
+    ENV: str = Field(
+        default=ENV,
+        description="Ambiente corrente (development, testing, production)"
+    )
     
     @property
     def IS_DEVELOPMENT(self) -> bool:
@@ -196,26 +302,43 @@ class Settings(BaseSettings):
                             # IMPOSTAZIONI LOGGING
     # ======================================================================
     # Livello di logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    LOG_LEVEL: str = Field(
+        default=os.getenv("LOG_LEVEL", "INFO"),
+        description="Livello di logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+    )
+    
     # Formato dei messaggi di log
-    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    LOG_FORMAT: str = Field(
+        default=os.getenv("LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"),
+        description="Formato dei messaggi di log"
+    )
 
     # ======================================================================
                             # IMPOSTAZIONI CORS
     # ======================================================================
     # Origini permesse per le richieste CORS (separate da virgola)
-    CORS_ORIGINS: List[str] = [
-        origin.strip()
-        for origin in os.getenv("CORS_ORIGINS", "http://localhost:4200").split(",")
-    ]
+    CORS_ORIGINS: List[str] = Field(
+        default_factory=lambda: [
+            origin.strip()
+            for origin in os.getenv("CORS_ORIGINS", "http://localhost:4200").split(",")
+        ],
+        description="Origini permesse per le richieste CORS (separate da virgola)"
+    )
+    
     # Abilita l'invio di credenziali nelle richieste CORS
-    CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "True").lower() == "true"   # verifichiamo come impostarlo!!
+    CORS_ALLOW_CREDENTIALS: bool = Field(
+        default=os.getenv("CORS_ALLOW_CREDENTIALS", "True").lower() == "true",
+        description="Abilita l'invio di credenziali nelle richieste CORS"
+    )
     
     # ======================================================================
                             # IMPOSTAZIONI SCHEDULER
     # ======================================================================
     # Fuso orario per lo scheduler (default: UTC)
-    SCHEDULER_TIMEZONE: str = os.getenv("SCHEDULER_TIMEZONE", "UTC")
+    SCHEDULER_TIMEZONE: str = Field(
+        default=os.getenv("SCHEDULER_TIMEZONE", "UTC"),
+        description="Fuso orario per lo scheduler (default: UTC)"
+    )
     
     # ======================================================================
                             # SICUREZZA COOKIE
@@ -237,49 +360,85 @@ class Settings(BaseSettings):
                             # CONFIGURAZIONE STORAGE AWS S3
     # ======================================================================
     # Tipo di storage: 's3' per AWS S3, 'local' per filesystem locale
-    STORAGE_TYPE: str = Field(default="local", pattern=r"^(s3|local)$")
+    STORAGE_TYPE: str = Field(
+        default=os.getenv("STORAGE_TYPE", "local"),
+        pattern=r"^(s3|local)$",
+        description="Tipo di storage: 's3' per AWS S3, 'local' per filesystem locale"
+    )
     
     # Nome del bucket S3 (obbligatorio se STORAGE_TYPE è 's3')
     S3_BUCKET_NAME: Optional[str] = Field(
-        default=None,
+        default=os.getenv("S3_BUCKET_NAME"),
         min_length=3,
         pattern=r"^[a-z0-9.-]{3,63}$",
-        examples=["my-production-bucket"]
+        examples=["my-production-bucket"],
+        description="Nome del bucket S3 (obbligatorio se STORAGE_TYPE è 's3')"
     )
     
     # Chiave di accesso per AWS S3 (obbligatoria se STORAGE_TYPE è 's3')
-    S3_ACCESS_KEY: Optional[SecretStr] = Field(default=None, min_length=20)
+    S3_ACCESS_KEY: Optional[SecretStr] = Field(
+        default=SecretStr(os.getenv("S3_ACCESS_KEY", "")) if os.getenv("S3_ACCESS_KEY") else None,
+        min_length=20,
+        description="Chiave di accesso per AWS S3 (obbligatoria se STORAGE_TYPE è 's3')"
+    )
     
     # Chiave segreta per AWS S3 (obbligatoria se STORAGE_TYPE è 's3')
-    S3_SECRET_KEY: Optional[SecretStr] = Field(default=None, min_length=40)
+    S3_SECRET_KEY: Optional[SecretStr] = Field(
+        default=SecretStr(os.getenv("S3_SECRET_KEY", "")) if os.getenv("S3_SECRET_KEY") else None,
+        min_length=40,
+        description="Chiave segreta per AWS S3 (obbligatoria se STORAGE_TYPE è 's3')"
+    )
     
     # Regione AWS per il bucket S3 (obbligatoria se STORAGE_TYPE è 's3')
     S3_REGION: Optional[str] = Field(
-        default=None,
+        default=os.getenv("S3_REGION"),
         pattern=r"^[a-z]{2}-[a-z]+-\d$",
-        examples=["us-east-1"]
+        examples=["us-east-1"],
+        description="Regione AWS per il bucket S3 (obbligatoria se STORAGE_TYPE è 's3')"
     )
     
     # Tipo di ACL per gli oggetti S3 (private o public-read)
-    S3_OBJECT_ACL: str = Field(default="private", pattern=r"^(private|public-read)$")
+    S3_OBJECT_ACL: str = Field(
+        default=os.getenv("S3_OBJECT_ACL", "private"),
+        pattern=r"^(private|public-read)$",
+        description="Tipo di ACL per gli oggetti S3 (private o public-read)"
+    )
     
     # ======================================================================
-                            # RATE LIMITING                                     # DA CAPIRE!!!
+                            # RATE LIMITING
     # ======================================================================
     # Abilita o disabilita il rate limiting sulle API
-    RATE_LIMIT_ENABLED: bool = os.getenv("RATE_LIMIT_ENABLED", "True").lower() == "true"
+    RATE_LIMIT_ENABLED: bool = Field(
+        default=os.getenv("RATE_LIMIT_ENABLED", "True").lower() == "true",
+        description="Abilita o disabilita il rate limiting sulle API"
+    )
+    
     # Limite di default (formato: "numero/unità" es. "100/minute")
-    DEFAULT_RATE_LIMIT: str = os.getenv("DEFAULT_RATE_LIMIT", "100/minute")
+    DEFAULT_RATE_LIMIT: str = Field(
+        default=os.getenv("DEFAULT_RATE_LIMIT", "100/minute"),
+        description="Limite di default (formato: \"numero/unità\" es. \"100/minute\")"
+    )
 
     # ======================================================================
                             # DOCUMENTAZIONE API
     # ======================================================================
     # URL per la documentazione Swagger UI
-    DOCS_URL: str = os.getenv("DOCS_URL", "/docs")
+    DOCS_URL: str = Field(
+        default=os.getenv("DOCS_URL", "/docs"),
+        description="URL per la documentazione Swagger UI"
+    )
+    
     # URL per la documentazione ReDoc
-    REDOC_URL: str = os.getenv("REDOC_URL", "/redoc")
+    REDOC_URL: str = Field(
+        default=os.getenv("REDOC_URL", "/redoc"),
+        description="URL per la documentazione ReDoc"
+    )
+    
     # URL per il file OpenAPI JSON
-    OPENAPI_URL: str = os.getenv("OPENAPI_URL", "/openapi.json")
+    OPENAPI_URL: str = Field(
+        default=os.getenv("OPENAPI_URL", "/openapi.json"),
+        description="URL per il file OpenAPI JSON"
+    )
     
     # ======================================================================
                             # CONFIGURAZIONE PYDANTIC
