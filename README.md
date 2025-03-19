@@ -9,18 +9,23 @@ A comprehensive backend system for businesses to manage and send reminders to th
 - **Reminder System**: Set up one-time or recurring reminders
 - **Multi-channel Notifications**: Send reminders via email, SMS, or WhatsApp
 - **Scheduling**: Automated reminder delivery at specified times
+- **Business-specific Settings**: Each business can configure their own notification channels
 
-## Tech Stack
+## Technology Stack
 
-- **Backend**: FastAPI, Python 3.11+
-- **Database**: MySQL (AWS RDS)
-- **ORM**: SQLAlchemy
-- **Migrations**: Alembic
-- **Authentication**: OAuth2 with JWT
-- **Notification Services**: 
-  - Email: SMTP via aiosmtplib
-  - SMS: Twilio
-  - WhatsApp: WhatsApp Business API
+| Component | Technology |
+|-----------|------------|
+| **Backend API** | FastAPI (Python) |
+| **Database** | AWS RDS (MySQL) |
+| **ORM** | SQLAlchemy |
+| **Migrations** | Alembic |
+| **Notifications** | SMTP (Email), Twilio (SMS), WhatsApp Business API |
+| **Deployment** | Docker + AWS EC2/ECS |
+| **Reverse Proxy** | Nginx or AWS ALB |
+| **Task Scheduling** | APScheduler |
+| **Authentication** | JWT (OAuth2) |
+| **API Documentation** | Swagger/OpenAPI |
+| **Testing** | Pytest |
 
 ## Project Structure
 
@@ -43,12 +48,25 @@ reminder_app/
 └── tests/                     # Test suite
 ```
 
+## Deployment Architecture
+
+The Reminder App is designed to be deployed as a centralized service that can manage multiple businesses and their users. The deployment architecture includes:
+
+- **App Server**: AWS EC2 or ECS for hosting the FastAPI application
+- **Database**: AWS RDS MySQL for data persistence
+- **Load Balancing**: AWS Application Load Balancer (for scaling)
+- **Monitoring**: AWS CloudWatch for logs and metrics
+- **Networking**: VPC configuration for security
+
+Each business using the platform will have their own account within the application but will use the same centralized infrastructure.
+
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.11+
 - MySQL database (or Docker for local development)
+- AWS account for production deployment
 - Twilio account (for SMS)
 - SMTP server (for Email)
 - WhatsApp Business API access

@@ -92,7 +92,7 @@ class SchedulerService:
                         notification_type=notification.notification_type,
                         recipient=recipient,
                         reminder=reminder,
-                        business=business
+                        business=business  # Pass the business object
                     )
                     
                     # Update notification status
@@ -134,7 +134,7 @@ class SchedulerService:
         notification_type: NotificationType,
         recipient: User,
         reminder: Reminder,
-        business: Business
+        business: Business  # Pass the business object
     ) -> bool:
         """
         Send a notification based on its type
@@ -154,10 +154,10 @@ class SchedulerService:
                     return False
                 
                 return await EmailService.send_reminder_email(
+                    business=business,  # Pass business
                     recipient_email=recipient.email,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description or "",
-                    business_name=business.name
                 )
                 
             elif notification_type == NotificationType.SMS:
@@ -165,10 +165,10 @@ class SchedulerService:
                     return False
                 
                 return SMSService.send_reminder_sms(
+                    business=business,  # Pass business
                     recipient_phone=recipient.phone_number,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
-                    business_name=business.name
                 )
                 
             elif notification_type == NotificationType.WHATSAPP:
@@ -176,10 +176,10 @@ class SchedulerService:
                     return False
                 
                 return await WhatsAppService.send_reminder_whatsapp(
+                    business=business,  # Pass business
                     recipient_phone=recipient.phone_number,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
-                    business_name=business.name
                 )
             
             return False

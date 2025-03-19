@@ -16,6 +16,7 @@ class EmailService:
     
     @staticmethod
     async def send_email(
+        business,  # Add business parameter
         recipient_email: str,
         subject: str,
         body: str,
@@ -23,9 +24,10 @@ class EmailService:
         html_content: Optional[str] = None,
     ) -> bool:
         """
-        Send an email to a recipient.
+        Send an email to a recipient using business-specific SMTP settings.
         
         Args:
+            business: Business object with SMTP settings
             recipient_email: Email address of the recipient
             subject: Subject of the email
             body: Text content of the email
@@ -36,8 +38,25 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         try:
+            # Check if business has SMTP configured
+            if not business.smtp_host or not business.smtp_user or not business.smtp_password:
+                logger.warning(f"Business {business.id} has no SMTP settings configured, falling back to global settings")
+                # Fall back to global settings if business settings not available
+                smtp_host = settings.SMTP_HOST
+                smtp_port = settings.SMTP_PORT
+                smtp_user = settings.SMTP_USER
+                smtp_password = settings.SMTP_PASSWORD
+                email_from = settings.EMAIL_FROM
+            else:
+                # Use business-specific settings
+                smtp_host = business.smtp_host
+                smtp_port = business.smtp_port
+                smtp_user = business.smtp_user
+                smtp_password = business.smtp_password
+                email_from = business.email_from or business.email or settings.EMAIL_FROM
+            
             message = MIMEMultipart('alternative')
-            message['From'] = settings.EMAIL_FROM
+            message['From'] = email_from
             message['To'] = recipient_email
             message['Subject'] = subject
             
@@ -54,10 +73,10 @@ class EmailService:
             # Send the email
             await aiosmtplib.send(
                 message,
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
-                username=settings.SMTP_USER,
-                password=settings.SMTP_PASSWORD,
+                hostname=smtp_host,
+                port=smtp_port or 587,
+                username=smtp_user,
+                password=smtp_password,
                 use_tls=True,
             )
             
@@ -70,24 +89,24 @@ class EmailService:
     
     @staticmethod
     async def send_reminder_email(
+        business,  # Add business parameter
         recipient_email: str,
         reminder_title: str,
         reminder_description: str,
-        business_name: str,
     ) -> bool:
         """
         Send a reminder email.
         
         Args:
+            business: Business object with SMTP settings
             recipient_email: Email address of the recipient
             reminder_title: Title of the reminder
             reminder_description: Description of the reminder
-            business_name: Name of the business sending the reminder
             
         Returns:
             True if email was sent successfully, False otherwise
         """
-        subject = f"Reminder: {reminder_title} from {business_name}"
+        subject = f"Reminder: {reminder_title} from {business.name}"
         
         # Create text content
         text_content = f"""
@@ -95,7 +114,7 @@ class EmailService:
         
         {reminder_description}
         
-        This reminder was sent by {business_name}.
+        This reminder was sent by {business.name}.
         """
         
         # Create HTML content
@@ -105,12 +124,13 @@ class EmailService:
                 <h2>Reminder: {reminder_title}</h2>
                 <p>{reminder_description}</p>
                 <br>
-                <p><em>This reminder was sent by {business_name}.</em></p>
+                <p><em>This reminder was sent by {business.name}.</em></p>
             </body>
         </html>
         """
         
         return await EmailService.send_email(
+            business=business,
             recipient_email=recipient_email,
             subject=subject,
             body=text_content,

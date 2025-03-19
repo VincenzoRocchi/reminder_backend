@@ -14,13 +14,15 @@ class SMSService:
     
     @staticmethod
     def send_sms(
+        business,  # Add business parameter
         recipient_phone: str,
         message: str,
     ) -> bool:
         """
-        Send an SMS to a recipient.
+        Send an SMS to a recipient using business-specific Twilio settings.
         
         Args:
+            business: Business object with Twilio settings
             recipient_phone: Phone number of the recipient (E.164 format)
             message: Content of the SMS
             
@@ -28,8 +30,21 @@ class SMSService:
             True if SMS was sent successfully, False otherwise
         """
         try:
+            # Check if business has Twilio configured
+            if not business.twilio_account_sid or not business.twilio_auth_token or not business.twilio_phone_number:
+                logger.warning(f"Business {business.id} has no Twilio settings configured, falling back to global settings")
+                # Fall back to global settings if business settings not available
+                account_sid = settings.TWILIO_ACCOUNT_SID
+                auth_token = settings.TWILIO_AUTH_TOKEN
+                phone_number = settings.TWILIO_PHONE_NUMBER
+            else:
+                # Use business-specific settings
+                account_sid = business.twilio_account_sid
+                auth_token = business.twilio_auth_token
+                phone_number = business.twilio_phone_number
+            
             # Check if Twilio credentials are configured
-            if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+            if not account_sid or not auth_token or not phone_number:
                 logger.error("Twilio credentials not configured")
                 return False
             
@@ -38,12 +53,12 @@ class SMSService:
                 recipient_phone = f"+{recipient_phone}"
             
             # Initialize Twilio client
-            client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+            client = Client(account_sid, auth_token)
             
             # Send the message
             message = client.messages.create(
                 to=recipient_phone,
-                from_=settings.TWILIO_PHONE_NUMBER,
+                from_=phone_number,
                 body=message
             )
             
@@ -56,25 +71,25 @@ class SMSService:
     
     @staticmethod
     def send_reminder_sms(
+        business,  # Add business parameter
         recipient_phone: str,
         reminder_title: str,
         reminder_description: Optional[str],
-        business_name: str,
     ) -> bool:
         """
         Send a reminder SMS.
         
         Args:
+            business: Business object with Twilio settings
             recipient_phone: Phone number of the recipient
             reminder_title: Title of the reminder
             reminder_description: Description of the reminder
-            business_name: Name of the business sending the reminder
             
         Returns:
             True if SMS was sent successfully, False otherwise
         """
         # Create message content
-        message = f"Reminder: {reminder_title} from {business_name}"
+        message = f"Reminder: {reminder_title} from {business.name}"
         
         # Add description if provided (keep SMS short)
         if reminder_description:
@@ -84,6 +99,7 @@ class SMSService:
             message += f"\n\n{description_preview}"
         
         return SMSService.send_sms(
+            business=business,
             recipient_phone=recipient_phone,
             message=message,
         )

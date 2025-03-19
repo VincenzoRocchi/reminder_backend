@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User as UserModel
 from app.models.business import Business as BusinessModel
-from app.schemas.business import Business, BusinessCreate, BusinessUpdate
+from app.schemas.business import Business, BusinessCreate, BusinessUpdate, BusinessNotificationSettings
 
 router = APIRouter()
 
@@ -102,6 +102,41 @@ def update_business(
     
     # Update business attributes
     update_data = business_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(business, key, value)
+    
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+    return business
+
+
+@router.put("/{business_id}/notification-settings", response_model=Business)
+def update_business_notification_settings(
+    business_id: int,
+    settings_in: BusinessNotificationSettings,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """
+    Update a business's notification settings.
+    """
+    business = db.query(BusinessModel).filter(BusinessModel.id == business_id).first()
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Business not found",
+        )
+    
+    # Check if current user is the owner
+    if business.owner_id != current_user.id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to update this business",
+        )
+    
+    # Update notification settings
+    update_data = settings_in.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(business, key, value)
     
