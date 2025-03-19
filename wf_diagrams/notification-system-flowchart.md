@@ -1,3 +1,6 @@
+# claude-flowchart-mixandmatch Flowchart
+
+```mermaid
 flowchart TD
     subgraph NotificationQueues["Notification Queues"]
         EmailQ["Email Queue"] 

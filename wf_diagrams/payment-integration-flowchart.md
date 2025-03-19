@@ -1,3 +1,6 @@
+# payment-integration-flowchart Flowchart
+
+```mermaid
 flowchart TD
     subgraph ReminderSystem["Reminder System"]
         RP["Reminder Processing"] --> PL["Payment Link<br>Generation"]

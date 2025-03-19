@@ -1,4 +1,8 @@
+# business-management-flowchart Flowchart
+
+```mermaid
 flowchart TD
+
     subgraph AdminInterface["Admin Interface"]
         SuperAdmin["Super Admin"] --> CreateBusiness["Create Business Account"]
         SuperAdmin --> ManagePlans["Manage Subscription Plans"]

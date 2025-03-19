@@ -1,4 +1,8 @@
+# claude-flowchart-mixandmatch Flowchart
+
+```mermaid
 flowchart TD
+
     subgraph Core["Core System (FastAPI Backend)"]
         API["API Endpoints"] --> Auth["Authentication (JWT)"]
         API --> RM["Reminder Management"]

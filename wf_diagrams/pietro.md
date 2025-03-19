@@ -1,3 +1,6 @@
+# pietro Flowchart
+
+```mermaid
 flowchart TD
     A["Admin (Azienda di commercialisti)"] --> B{"Crea/Modifica Promemoria"} & C{"Sistema automatico (Cron Job)"} & D["Cliente finale"]
     B --> B1["Definisce: <br>Tipo (scadenza, pagamento), <br>Data del mese, <br>Messaggio, <br>Canale (WhatsApp/Email), <br>Link Fattura/Pagamento"] & B2["Associa Clienti <br>(preimportati o aggiunti manualmente)"]

@@ -1,3 +1,6 @@
+# data-integration-flowchart Flowchart
+
+```mermaid
 flowchart TD
     subgraph DatabaseInfrastructure["Database Infrastructure"]
         PrimaryDB[(AWS RDS MySQL<br>Primary Database)] <--> ReadReplica[(Read Replicas<br>for Scaling)]

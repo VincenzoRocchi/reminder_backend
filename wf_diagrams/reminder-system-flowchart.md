@@ -1,3 +1,6 @@
+# reminder-system-flowchart Flowchart
+
+```mermaid
 flowchart TD
     subgraph BusinessUI["Business Admin Interface"]
         Create["Create Reminder"] --> RType["Select Reminder Type:<br>- Payment<br>- Deadline<br>- Notification"]

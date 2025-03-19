@@ -1,3 +1,6 @@
+# Authentication Flowchart
+
+```mermaid
 flowchart TD
     subgraph Client["Client Applications"]
         MApp["Mobile App"] --> Auth["Authentication Requests"]
