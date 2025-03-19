@@ -226,6 +226,19 @@ Apply migrations:
 alembic upgrade head
 ```
 
+## Validation Settings
+
+The application supports two validation modes:
+
+- **Strict Validation** (default in production): All input validation rules are enforced
+- **Relaxed Validation** (optional in development): Validation warnings are logged but don't block operations
+
+To enable relaxed validation in development:
+
+```bash
+# In your .env.development file
+STRICT_VALIDATION=False
+```
 ## License
 
 [MIT](LICENSE)

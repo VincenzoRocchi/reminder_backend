@@ -1,13 +1,21 @@
-# Update app/models/business.py to store encrypted credentials
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, mapped_column, Mapped
 from typing import Optional
 from datetime import datetime
+import logging
+import uuid
 
+from app.core.settings import settings
 from app.database import Base
 from app.core.encryption import encryption_service
+from app.core.exceptions import (
+    EncryptionError,
+    InvalidConfigurationError,
+    SensitiveDataStorageError
+)
 
+logger = logging.getLogger(__name__)
 
 class Business(Base):
     """
@@ -25,7 +33,7 @@ class Business(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(500))
     email: Mapped[Optional[str]] = mapped_column(String(255))
-    phone_number: Mapped[Optional[str]] = mapped_column(String(20))
+    _phone_number: Mapped[Optional[str]] = mapped_column("phone_number", String(20))  # Encrypted field
     address: Mapped[Optional[str]] = mapped_column(String(500))
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -36,156 +44,173 @@ class Business(Base):
     smtp_host: Mapped[Optional[str]] = mapped_column(String(255))
     smtp_port: Mapped[Optional[int]] = mapped_column(Integer)
     smtp_user: Mapped[Optional[str]] = mapped_column(String(255))
-    _smtp_password: Mapped[Optional[str]] = mapped_column("smtp_password", String(500))  # Encrypted field
+    _smtp_password: Mapped[Optional[str]] = mapped_column("smtp_password", String(500))
     email_from: Mapped[Optional[str]] = mapped_column(String(255))
     
     # SMS notification settings
     twilio_account_sid: Mapped[Optional[str]] = mapped_column(String(255))
-    _twilio_auth_token: Mapped[Optional[str]] = mapped_column("twilio_auth_token", String(500))  # Encrypted field
+    _twilio_auth_token: Mapped[Optional[str]] = mapped_column("twilio_auth_token", String(500))
     twilio_phone_number: Mapped[Optional[str]] = mapped_column(String(20))
     
     # WhatsApp notification settings
-    _whatsapp_api_key: Mapped[Optional[str]] = mapped_column("whatsapp_api_key", String(500))  # Encrypted field
+    _whatsapp_api_key: Mapped[Optional[str]] = mapped_column("whatsapp_api_key", String(500))
     whatsapp_api_url: Mapped[Optional[str]] = mapped_column(String(255))
     
     # Relationships
     owner = relationship("User", back_populates="businesses")
     reminders = relationship("Reminder", back_populates="business", cascade="all, delete-orphan")
-    
-    # Properties for encrypted fields with improved error handling and logging
+
+    # Phone number encryption
+    @property
+    def phone_number(self) -> Optional[str]:
+        """Get decrypted phone number"""
+        if not self._phone_number:
+            return None
+        try:
+            return encryption_service.decrypt_string(self._phone_number)
+        except Exception as e:
+            logger.error(f"Decryption failed for phone number | BizID:{self.id} | Error:{e}")
+            return None
+
+    @phone_number.setter
+    def phone_number(self, value: Optional[str]) -> None:
+        """Set and encrypt phone number"""
+        original_value = self._phone_number
+        try:
+            if value is None:
+                self._phone_number = None
+                return
+
+            self._phone_number = encryption_service.encrypt_string(value)
+            logger.info(f"Phone number updated | BizID:{self.id}")
+
+        except Exception as e:
+            self._phone_number = original_value
+            logger.error(f"Phone number storage failed | BizID:{self.id} | TraceID:{uuid.uuid4()}")
+            raise SensitiveDataStorageError("phone number") from e
+
+    # SMTP Password management
     @property
     def smtp_password(self) -> Optional[str]:
-        """
-        Get decrypted SMTP password
-        
-        Returns:
-            Decrypted password or None if not set or decryption fails
-        """
+        """Get decrypted SMTP password"""
         if not self._smtp_password:
             return None
         
         try:
             return encryption_service.decrypt_string(self._smtp_password)
         except Exception as e:
-            # Log the error but preserve privacy by not logging the actual encrypted value
-            import logging
-            logging.error(f"Failed to decrypt smtp_password for business {self.id}: {str(e)}")
+            logger.error(f"Decryption failed for SMTP password | BizID:{self.id} | Error:{e}")
             return None
-    
+
     @smtp_password.setter
     def smtp_password(self, value: Optional[str]) -> None:
-        """
-        Set SMTP password, encrypting it before storage
-        
-        Args:
-            value: Plain text password to encrypt and store
-        """
-        if value is None:
-            self._smtp_password = None
-        else:
-            try:
-                self._smtp_password = encryption_service.encrypt_string(str(value))
-            except Exception as e:
-                import logging
-                logging.error(f"Failed to encrypt smtp_password for business {self.id}: {str(e)}")
-                # Avoid storing unencrypted sensitive data in case of encryption failure
+        """Set and encrypt SMTP password"""
+        original_value = self._smtp_password
+        try:
+            if value is None:
                 self._smtp_password = None
-                # Raise exception to prevent silent security failures
-                raise ValueError("Failed to encrypt sensitive data") from e
-    
+                return
+
+            # Only enforce length requirement if strict validation is enabled
+            if settings.should_validate('format') and len(value) < 8:
+                logger.warning(f"SMTP password too short | BizID:{self.id} | STRICT_VALIDATION: {settings.STRICT_VALIDATION}")
+                
+                if settings.STRICT_VALIDATION:
+                    raise InvalidConfigurationError("SMTP", "Password must be at least 8 characters")
+                # If not strict, continue despite validation failure
+
+            self._smtp_password = encryption_service.encrypt_string(value)
+            logger.info(f"SMTP password updated | BizID:{self.id}")
+
+        except InvalidConfigurationError as ice:
+            raise ice
+        except Exception as e:
+            self._smtp_password = original_value
+            logger.error(f"SMTP password storage failed | BizID:{self.id} | TraceID:{uuid.uuid4()}")
+            raise SensitiveDataStorageError("SMTP password") from e
+
+    # Twilio Auth Token management
     @property
     def twilio_auth_token(self) -> Optional[str]:
-        """
-        Get decrypted Twilio auth token
-        
-        Returns:
-            Decrypted token or None if not set or decryption fails
-        """
+        """Get decrypted Twilio auth token"""
         if not self._twilio_auth_token:
             return None
         
         try:
             return encryption_service.decrypt_string(self._twilio_auth_token)
         except Exception as e:
-            import logging
-            logging.error(f"Failed to decrypt twilio_auth_token for business {self.id}: {str(e)}")
+            logger.error(f"Decryption failed for Twilio token | BizID:{self.id} | Error:{e}")
             return None
-    
+
     @twilio_auth_token.setter
     def twilio_auth_token(self, value: Optional[str]) -> None:
-    """
-    Sets and encrypts Twilio auth token with validation
-    
-    Args:
-        value: Plain text token (must be 32 chars starting with 'SK')
-    
-    Raises:
-        ValueError: For invalid token format
-        EncryptionError: For encryption failures
-    """
-    if value:
-        # Validazione formato Twilio
-        if len(value) != 32 or not value.startswith('SK'):
-            raise ValueError(
-                "Invalid Twilio Auth Token format. "
-                "Must be 32 characters starting with 'SK'"
-            )
-    
-    original_value = self._twilio_auth_token
-    
-    try:
-        if value is None:
-            self._twilio_auth_token = None
-        else:
+        """Set and encrypt Twilio auth token with validation"""
+        original_value = self._twilio_auth_token
+        try:
+            if value is None:
+                self._twilio_auth_token = None
+                return
+
+            # Only validate format if strict validation is enabled
+            if settings.should_validate('format'):
+                if len(value) != 32 or not value.startswith('SK'):
+                    # Log the validation issue even if we bypass
+                    logger.warning(f"Twilio token format invalid | BizID:{self.id} | STRICT_VALIDATION: {settings.STRICT_VALIDATION}")
+                    
+                    if settings.STRICT_VALIDATION:
+                        raise InvalidConfigurationError(
+                            "Twilio", 
+                            "Auth token must be 32 characters starting with 'SK'"
+                        )
+                    # If not strict, continue despite validation failure
+            
+            # Always encrypt, even if validation is bypassed
             self._twilio_auth_token = encryption_service.encrypt_string(value)
-            
-            # Audit log
-            logging.info(
-                f"Twilio token updated for business {self.id} | "
-                f"At: {datetime.datetime.utcnow().isoformat()}"
-            )
-            
-    except Exception as e:
-        self._twilio_auth_token = original_value  # Rollback
-        logging.error(
-            f"Encryption failure | Biz:{self.id} | "
-            f"Error:{type(e).__name__} | TraceID:{uuid.uuid4()}"
-        )
-        raise EncryptionError("Secure storage failed") from e
-    
+            logger.info(f"Twilio token updated | BizID:{self.id}")
+
+        except InvalidConfigurationError as ice:
+            raise ice
+        except Exception as e:
+            self._twilio_auth_token = original_value
+            logger.error(f"Twilio token storage failed | BizID:{self.id} | TraceID:{uuid.uuid4()}")
+            raise SensitiveDataStorageError("Twilio auth token") from e
+
+    # WhatsApp API Key management                       *******CONTROLLARE documentazione specifica del provider WhatsApp*******
     @property
     def whatsapp_api_key(self) -> Optional[str]:
-        """
-        Get decrypted WhatsApp API key
-        
-        Returns:
-            Decrypted API key or None if not set or decryption fails
-        """
+        """Get decrypted WhatsApp API key"""
         if not self._whatsapp_api_key:
             return None
         
         try:
             return encryption_service.decrypt_string(self._whatsapp_api_key)
         except Exception as e:
-            import logging
-            logging.error(f"Failed to decrypt whatsapp_api_key for business {self.id}: {str(e)}")
+            logger.error(f"Decryption failed for WhatsApp API key | BizID:{self.id} | Error:{e}")
             return None
-    
+
     @whatsapp_api_key.setter
     def whatsapp_api_key(self, value: Optional[str]) -> None:
-        """
-        Set WhatsApp API key, encrypting it before storage
-        
-        Args:
-            value: Plain text API key to encrypt and store
-        """
-        if value is None:
-            self._whatsapp_api_key = None
-        else:
-            try:
-                self._whatsapp_api_key = encryption_service.encrypt_string(str(value))
-            except Exception as e:
-                import logging
-                logging.error(f"Failed to encrypt whatsapp_api_key for business {self.id}: {str(e)}")
+        """Set and encrypt WhatsApp API key"""
+        original_value = self._whatsapp_api_key
+        try:
+            if value is None:
                 self._whatsapp_api_key = None
-                raise ValueError("Failed to encrypt sensitive data") from e
+                return
+
+            # Only enforce length requirement if strict validation is enabled
+            if settings.should_validate('format') and len(value) < 16:
+                logger.warning(f"WhatsApp API key too short | BizID:{self.id} | STRICT_VALIDATION: {settings.STRICT_VALIDATION}")
+                
+                if settings.STRICT_VALIDATION:
+                    raise InvalidConfigurationError("WhatsApp", "API key must be at least 16 characters")
+                # If not strict, continue despite validation failure
+
+            self._whatsapp_api_key = encryption_service.encrypt_string(value)
+            logger.info(f"WhatsApp API key updated | BizID:{self.id}")
+
+        except InvalidConfigurationError as ice:
+            raise ice
+        except Exception as e:
+            self._whatsapp_api_key = original_value
+            logger.error(f"WhatsApp key storage failed | BizID:{self.id} | TraceID:{uuid.uuid4()}")
+            raise SensitiveDataStorageError("WhatsApp API key") from e

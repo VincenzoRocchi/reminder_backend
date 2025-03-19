@@ -298,6 +298,29 @@ class Settings(BaseSettings):
         """
         return self.ENV == "production"
     
+    STRICT_VALIDATION: bool = Field(
+        default=os.getenv("STRICT_VALIDATION", "True" if not ENV == "development" else "False").lower() == "true",
+        description="Enforce strict validation of sensitive data (default: True in production, False in development)"
+    )
+
+    def should_validate(self, validation_type: str = "all") -> bool:
+        """
+        Determina se un particolare tipo di validazione deve essere applicato in base alle impostazioni dell'ambiente.
+        
+        Args:
+            validation_type: Tipo di validazione da controllare (es. 'security', 'format', 'all')
+            
+        Returns:
+            bool: True se la validazione deve essere applicata, False se può essere bypassata
+        """
+        # Valida sempre in produzione indipendentemente dall'impostazione STRICT_VALIDATION
+        if self.IS_PRODUCTION:
+            return True
+            
+        # In sviluppo, rispetta l'impostazione STRICT_VALIDATION
+        return self.STRICT_VALIDATION
+
+
     # ======================================================================
                             # IMPOSTAZIONI LOGGING
     # ======================================================================
