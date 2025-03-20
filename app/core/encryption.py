@@ -157,7 +157,7 @@ class EncryptionService:
         
         try:
             encrypted_data = self._fernet.encrypt(data.encode())
-            return encrypted_data.decode()
+            return f"v1:{encrypted_data.decode()}"
         except Exception as e:
             logger.error(f"Error encrypting string: {str(e)}")
             raise RuntimeError(f"Encryption failed: {str(e)}")
@@ -176,8 +176,15 @@ class EncryptionService:
             return ""
         
         try:
-            decrypted_data = self._fernet.decrypt(encrypted_data.encode())
-            return decrypted_data.decode()
+            # Handle versioned encryption
+            if encrypted_data.startswith("v1:"):
+                # Version 1 encryption scheme
+                actual_data = encrypted_data[3:]  # Remove "v1:" prefix
+                decrypted_data = self._fernet.decrypt(actual_data.encode())
+                return decrypted_data.decode()
+            else:
+                decrypted_data = self._fernet.decrypt(encrypted_data.encode())
+                return decrypted_data.decode()
         except Exception as e:
             logger.error(f"Error decrypting string: {str(e)}")
             raise RuntimeError(f"Decryption failed: {str(e)}")

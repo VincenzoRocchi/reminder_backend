@@ -40,3 +40,39 @@ class SensitiveDataStorageError(SecurityException):
             message=f"Failed to securely store {field}",
             code="SENSITIVE_DATA_STORAGE_FAILURE"
         )
+
+class TokenExpiredError(SecurityException):
+    """Exception for expired tokens"""
+    def __init__(self):
+        super().__init__(
+            message="Authentication token has expired",
+            code="TOKEN_EXPIRED"
+        )
+
+class TokenInvalidError(SecurityException):
+    """Exception for invalid tokens"""
+    def __init__(self, reason: str = "Token validation failed"):
+        super().__init__(
+            message=f"Invalid token: {reason}",
+            code="TOKEN_INVALID"
+        )
+
+class TokenRevokedError(SecurityException):
+    """Exception for revoked/blacklisted tokens"""
+    def __init__(self):
+        super().__init__(
+            message="Token has been revoked",
+            code="TOKEN_REVOKED"
+        )
+        
+class InsufficientPermissionsError(SecurityException):
+    """Exception for permission issues"""
+    def __init__(self, required_permission: str = None):
+        message = "Insufficient permissions"
+        if required_permission:
+            message += f": {required_permission} required"
+            
+        super().__init__(
+            message=message,
+            code="INSUFFICIENT_PERMISSIONS"
+        )

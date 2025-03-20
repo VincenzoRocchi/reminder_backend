@@ -1,3 +1,29 @@
+# --------------------------------PRODUCTION NOTES--------------------------------
+#
+# 1. VALIDATIONS
+#    - Validators (SMTP, Twilio, WhatsApp) ensure sensitive data meets required formats
+#    - Consider enabling STRICT_VALIDATION in production for:
+#      --Stronger data validation
+#      --Prevention of misconfiguration
+#      --Enhanced security checks
+#
+# 2. SENSITIVE DATA SERIALIZATION
+#    - BusinessInDBBase handles decryption of sensitive fields
+#    - Production Security Checklist:
+#      --Verify encryption key management
+#      --Monitor decryption processes
+#      --Ensure no unencrypted data exposure
+#      --Implement proper key rotation
+#
+# 3. MODULARITY
+#    - Use these schemas as templates for new implementations
+#    - Maintain consistent structure across the application
+#    - Follow established patterns for:
+#      --Field validation
+#      --Data encryption
+#      --Error handling
+# -----------------------------------------------------------------------------
+
 from pydantic import BaseModel, EmailStr, Field, model_validator, field_serializer, ConfigDict
 from typing import Optional, Dict, Any, ClassVar
 from datetime import datetime
