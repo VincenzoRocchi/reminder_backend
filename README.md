@@ -32,7 +32,7 @@ A comprehensive backend system for businesses (such as accounting firms) to mana
 
 ## Project Structure
 
-```
+```bash
 reminder_app/
 ├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
@@ -43,28 +43,13 @@ reminder_app/
 ├── alembic/                   # Database migrations
 ├── app/                       # Main application package
 │   ├── api/                   # API endpoints
-│   │   ├── auth.py            # Authentication endpoints
-│   │   ├── businesses.py      # Business management endpoints
-│   │   ├── clients.py         # Client management endpoints
-│   │   ├── reminders.py       # Reminder configuration endpoints
-│   │   ├── notifications.py   # Notification history endpoints
-│   │   └── payments.py        # Payment integration endpoints
 │   ├── core/                  # Core functionality
-│   │   ├── config.py          # Application configuration
-│   │   ├── security.py        # Security utilities (JWT)
-│   │   └── errors.py          # Error handling
 │   ├── models/                # Database models
-│   │   ├── business.py        # Business model
-│   │   ├── client.py          # Client model
-│   │   ├── reminder.py        # Reminder model
-│   │   ├── notification.py    # Notification model
-│   │   └── payment.py         # Payment model
 │   ├── schemas/               # Pydantic schemas
 │   └── services/              # External services integration
 │       ├── email_service.py   # Email notification service
 │       ├── sms_service.py     # SMS notification service
 │       ├── whatsapp_service.py # WhatsApp notification service
-│       ├── payment_service.py  # Stripe payment integration
 │       └── scheduler_service.py # APScheduler integration for reminders
 ├── scripts/                   # Utility scripts
 └── tests/                     # Test suite
@@ -88,7 +73,7 @@ Each business using the platform (such as accounting firms) will have their own 
 2. **Client Management**: Businesses import or manually add their clients
 3. **Reminder Configuration**: Businesses create reminders with specified schedules, messages, and notification channels
 4. **Client Assignment**: Clients are associated with specific reminders
-5. **Notification Delivery**: 
+5. **Notification Delivery**:
    - Automated delivery based on schedule
    - Manual trigger option for immediate delivery
 6. **Client Experience**:
@@ -114,19 +99,81 @@ Each business using the platform (such as accounting firms) will have their own 
 
 ### Installation
 
-1. Clone the repository
-2. Create a virtual environment:
+#### Option 1: Using uv (Recommended)
+
+uv is a fast Python package installer and resolver that can significantly speed up dependency installation.
+
+1. Install uv (if not already installed) [following these instructions](https://docs.astral.sh/uv/getting-started/installation):
+
+   ```bash
+   winget install --id=astral-sh.uv  -e
    ```
+
+2. Clone the repository:
+
+   ```bash
+   git clone https://github.com/yourusername/reminder-app.git
+   cd reminder-app
+   ```
+
+3. Create and activate a virtual environment with uv:
+
+   ```bash
+   uv venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+4. Install dependencies:
+
+   ```bash
+   uv pip sync [requirements.txt]
+   ```
+
+5. Copy `.env.example` to `.env` and configure environment variables:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+6. Run database migrations:
+
+   ```bash
+   alembic upgrade head
+   ```
+
+#### Option 2: Using pip
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/yourusername/reminder-app.git
+   cd reminder-app
+   ```
+
+2. Create a virtual environment:
+
+   ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
+
 3. Install dependencies:
-   ```
+
+   ```bash
    pip install -r requirements.txt
    ```
-4. Copy `.env.example` to `.env` and configure environment variables
-5. Run database migrations:
+
+4. Copy `.env.example` to `.env` and configure environment variables:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
    ```
+
+5. Run database migrations:
+
+   ```bash
    alembic upgrade head
    ```
 
@@ -134,23 +181,23 @@ Each business using the platform (such as accounting firms) will have their own 
 
 #### Development Mode
 
-```
+```bash
 python main.py
 ```
 
-or 
+or
 
-```
+```bash
 uvicorn app.main:app --reload
 ```
 
 #### Using Docker
 
-```
+```bash
 docker-compose up
 ```
 
-## API Documentation
+### API Documentation
 
 Once the application is running, access the API documentation at:
 
@@ -161,7 +208,7 @@ Once the application is running, access the API documentation at:
 
 Run tests with pytest:
 
-```
+``` bash
 pytest
 ```
 
@@ -169,16 +216,29 @@ pytest
 
 Create a new migration:
 
-```
+``` bash
 alembic revision --autogenerate -m "Description of changes"
 ```
 
 Apply migrations:
 
-```
+``` bash
 alembic upgrade head
 ```
 
+## Validation Settings
+
+The application supports two validation modes:
+
+- **Strict Validation** (default in production): All input validation rules are enforced
+- **Relaxed Validation** (optional in development): Validation warnings are logged but don't block operations
+
+To enable relaxed validation in development:
+
+```bash
+# In your .env.development file
+STRICT_VALIDATION=False
+```
 ## License
 
 [MIT](LICENSE)

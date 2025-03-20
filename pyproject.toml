@@ -1,14 +1,35 @@
 [project]
 name = "reminder-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "A comprehensive backend for managing and sending reminders"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
-    "fastapi[standard]>=0.115.11",
-    "ipykernel>=6.29.5",
-    "mysql>=0.0.3",
-    "mysql-connector-python>=9.2.0",
-    "typing>=3.10.0.0",
-    "uvicorn>=0.34.0",
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.23.2",
+    "sqlalchemy>=2.0.22",
+    "alembic>=1.12.0",
+    "pymysql>=1.1.0",
+    "cryptography>=41.0.4",
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.6",
+    "pydantic>=2.4.2",
+    "pydantic-settings>=2.0.3",
+    "email-validator>=2.0.0",
+    "aiosmtplib>=2.0.2",
+    "twilio>=8.10.0",
+    "httpx>=0.25.0",
+    "apscheduler>=3.10.4",
+    "python-dotenv>=1.0.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
