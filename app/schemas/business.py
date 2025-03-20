@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, model_validator, field_serializer, ConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, ClassVar
 from datetime import datetime
 from app.core.encryption import encryption_service
 from app.core.validators import (
@@ -95,7 +95,8 @@ class BusinessInDBBase(BusinessBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    _sensitive_fields = ['smtp_password', 'twilio_auth_token', 'whatsapp_api_key']
+    # soluzione definitiva, robusta, ufficiale e corretta - lista costante e non campo-Pydantic - raccomandato anche per produzione
+    _sensitive_fields: ClassVar[list[str]] = ['smtp_password', 'twilio_auth_token', 'whatsapp_api_key']
     
     model_config = ConfigDict(
         from_attributes=True,
@@ -104,23 +105,15 @@ class BusinessInDBBase(BusinessBase):
     @model_validator(mode='before')
     @classmethod
     def decrypt_sensitive_data(cls, data: Any) -> Dict[str, Any]:
-        if hasattr(data, '__dict__'):
-            data_dict = {**data.__dict__}
-            
-            if hasattr(data, '__fields__'):
-                for field in data.__fields__:
-                    if hasattr(data, field):
-                        data_dict[field] = getattr(data, field)
-        else:
-            data_dict = dict(data)
-        
+        data_dict = dict(data.__dict__) if hasattr(data, '__dict__') else dict(data)
+
         for field in cls._sensitive_fields:
             if field in data_dict and data_dict[field]:
                 try:
                     data_dict[field] = encryption_service.decrypt_string(data_dict[field])
                 except Exception:
                     pass
-        
+
         return data_dict
     
     @field_serializer('smtp_password')

@@ -1,3 +1,30 @@
+# ----------------------------------------------------------------------
+# NOTE PER LA PRODUZIONE:
+#
+# 1. Verifica che le dipendenze:
+#    - `get_db`: Assicurati che punti al database di produzione (es. PostgreSQL o MySQL)
+#      e che la gestione delle connessioni (pooling, timeout, SSL, ecc.) sia configurata correttamente.
+#    - `get_current_user`: Implementa un sistema di autenticazione reale (ad es. OAuth2/JWT)
+#      che validi in modo sicuro l'utente, anziché utilizzare override o dati statici.
+#
+# 2. Sicurezza e Gestione degli Errori:
+#    - Controlla che le eccezioni vengano gestite senza esporre informazioni sensibili agli utenti.
+#    - Rivedi la logica di validazione (ad es. per SMTP, Twilio, ecc.) per assicurarti che sia
+#      adeguata all'ambiente di produzione.
+#
+# 3. Esposizione degli Endpoints:
+#    - Assicurati che il router sia incluso nel router principale (definito in app/routes.py)
+#      con il corretto prefisso (coerente con API_V1_STR definito in settings.py).
+#
+# 4. Logging e Monitoraggio:
+#    - Potresti voler integrare un sistema di logging avanzato per tracciare gli errori e monitorare
+#      le richieste in produzione.
+#
+# In sintesi, in produzione dovrai principalmente:
+#    - Configurare correttamente le dipendenze (database e autenticazione).
+#    - Garantire che le impostazioni di sicurezza siano adeguate e che non vengano rivelate informazioni sensibili.
+#    - Verificare che il montaggio del router e l'esposizione degli endpoint siano coerenti con le configurazioni.
+
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session

@@ -1,3 +1,35 @@
+# ----------------------------------------------------------------------
+# NOTE PER LA PRODUZIONE:
+#
+# 1. Sicurezza e Crittografia:
+#    - Verifica che il modulo `encryption_service` utilizzi chiavi e algoritmi
+#      adeguati per la produzione. Assicurati che le chiavi di cifratura siano
+#      gestite in modo sicuro (ad es. tramite variabili d'ambiente o un secret manager).
+#
+# 2. Validazione dei Dati Sensibili:
+#    - Conferma che la logica di validazione (ad es. per SMTP, Twilio, WhatsApp)
+#      sia sufficientemente rigorosa in produzione. Potrebbe essere necessario abilitare
+#      la modalità "strict" per garantire la conformità ai requisiti di sicurezza.
+#
+# 3. Logging:
+#    - In produzione, regola il livello di logging per evitare di scrivere
+#      informazioni troppo dettagliate (specialmente errori che contengono dati sensibili).
+#
+# 4. Prestazioni e Constrain:
+#    - Assicurati che i tipi di dati e le dimensioni dei campi siano ottimali per il
+#      carico del database in produzione. Considera l'aggiunta di indici sui campi
+#      più frequentemente interrogati.
+#
+# 5. Gestione degli Errori:
+#    - Rivedi il comportamento in caso di errori di cifratura/decrittazione per
+#      garantire che non vengano rivelate informazioni sensibili all'utente finale.
+#
+# In sintesi, il codice del modello rimane sostanzialmente invariato in produzione,
+# ma dovrai concentrarti su:
+#    - La configurazione sicura e aggiornata del servizio di crittografia.
+#    - Il corretto bilanciamento tra validazioni stringenti e usabilità.
+#    - Un logging e una gestione degli errori che non compromettano la sicurezza.
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, mapped_column, Mapped

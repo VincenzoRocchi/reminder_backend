@@ -1,33 +1,44 @@
+from fastapi import FastAPI
+from app.api.endpoints.businesses import router as businesses_router
+from app.core.settings import settings
+
+
 import unittest
 from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from app.database import Base, get_db
-from app.main import app
 from app.models.user import User
 from app.models.business import Business
 from app.core.security import get_password_hash
 from app.core.encryption import encryption_service
 from app.core.exceptions import InvalidConfigurationError, SensitiveDataStorageError
+from app.api.dependencies import get_current_user
 
 # Database SQLite in memoria
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(TEST_SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    TEST_SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+app = FastAPI()
+app.include_router(businesses_router, prefix=f"{settings.API_V1_STR}/businesses")
 
 class TestBusiness(unittest.TestCase):
-    """Test suite per il modello Business e le sue API"""
     
     def setUp(self):
         """Preparazione per ogni test"""
-        # Crea le tabelle del database
+        Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         self.db = TestingSessionLocal()
-        
-        # Crea un utente di test nel database
+
+        # Crea un utente di test
         self.test_user = User(
             email="test@example.com",
             full_name="Test User",
@@ -38,43 +49,40 @@ class TestBusiness(unittest.TestCase):
         self.db.add(self.test_user)
         self.db.commit()
         self.db.refresh(self.test_user)
-        
-        # Configura il client di test con una sovrascrittura della dipendenza get_db
+
+        self.business_model = Business(
+            name="Test Business Model",
+            email="test@business.com",
+            owner_id=self.test_user.id
+        )
+        self.db.add(self.business_model)
+        self.db.commit()
+        self.db.refresh(self.business_model)
+
+        # Funzione di override per ottenere il database nei test
         def override_get_db():
             try:
                 yield self.db
             finally:
                 pass
-        
+
+        # Funzione di override per ottenere l'utente corrente nei test
+        def override_get_current_user():
+            return self.test_user
+
+        # Applica gli override delle dipendenze
         app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        # Inizializza il client di test
         self.client = TestClient(app)
-        
-        # Configura il mock per get_current_user
-        self.get_current_user_patcher = patch("app.api.dependencies.get_current_user")
-        self.mock_get_current_user = self.get_current_user_patcher.start()
-        self.mock_get_current_user.return_value = self.test_user
-        
-        # Crea un'istanza Business per test senza database
-        self.business_model = Business(
-            name="Test Business",
-            description="Un business di test per unit testing",
-            email="test@example.com",
-            owner_id=self.test_user.id,
-            is_active=True
-        )
-    
+
     def tearDown(self):
         """Pulizia dopo ogni test"""
-        # Rimuove le sovrascritture di dipendenza
         app.dependency_overrides.clear()
-        
-        # Ferma i patcher
-        self.get_current_user_patcher.stop()
-        
-        # Pulisce il database
         self.db.close()
         Base.metadata.drop_all(bind=engine)
-    
+
     # SEZIONE 1: TEST SUL SERVIZIO DI CRITTOGRAFIA
     
     def test_encryption_service(self):
@@ -87,6 +95,7 @@ class TestBusiness(unittest.TestCase):
     
     # SEZIONE 2: TEST SULLE OPERAZIONI API DI BUSINESS
     
+    # In the test_create_business method, let's fix the endpoint path
     def test_create_business(self):
         """Verifica la creazione di un'azienda tramite API"""
         business_data = {
@@ -95,10 +104,15 @@ class TestBusiness(unittest.TestCase):
             "description": "Test descrizione"
         }
         response = self.client.post(
-            "/api/v1/businesses/",
+            f"{settings.API_V1_STR}/businesses/",  # Use root path since we've already set the prefix
             json=business_data,
             headers={"Authorization": "Bearer test_token"}
         )
+    
+        # DEBUG temporaneo: vedere output risposta
+        print("STATUS:", response.status_code)
+        print("BODY:", response.json())
+    
         self.assertEqual(response.status_code, 201)
         data = response.json()
         self.assertEqual(data["name"], business_data["name"])
@@ -116,7 +130,7 @@ class TestBusiness(unittest.TestCase):
         self.db.refresh(business)
         
         response = self.client.get(
-            f"/api/v1/businesses/{business.id}",
+            f"{settings.API_V1_STR}/businesses/{business.id}",
             headers={"Authorization": "Bearer test_token"}
         )
         self.assertEqual(response.status_code, 200)
@@ -138,7 +152,7 @@ class TestBusiness(unittest.TestCase):
             "name": "Nome Aggiornato"
         }
         response = self.client.put(
-            f"/api/v1/businesses/{business.id}",
+            f"{settings.API_V1_STR}/businesses/{business.id}",
             json=update_data,
             headers={"Authorization": "Bearer test_token"}
         )
@@ -158,13 +172,13 @@ class TestBusiness(unittest.TestCase):
         self.db.refresh(business)
         
         response = self.client.delete(
-            f"/api/v1/businesses/{business.id}",
+            f"{settings.API_V1_STR}/businesses/{business.id}",
             headers={"Authorization": "Bearer test_token"}
         )
         self.assertEqual(response.status_code, 204)
         
         response = self.client.get(
-            f"/api/v1/businesses/{business.id}",
+            f"{settings.API_V1_STR}/businesses/{business.id}",
             headers={"Authorization": "Bearer test_token"}
         )
         self.assertEqual(response.status_code, 404)
@@ -227,7 +241,7 @@ class TestBusiness(unittest.TestCase):
     
     def test_twilio_validation_strict(self):
         """Verifica che la validazione sollevi un'eccezione in modalità stretta"""
-        with patch('app.core.settings.settings.should_validate', return_value=True):
+        with patch('app.core.settings.Settings.should_validate', return_value=True):
             with patch('app.core.settings.settings.STRICT_VALIDATION', True):
                 business = Business(
                     name="Test Business",

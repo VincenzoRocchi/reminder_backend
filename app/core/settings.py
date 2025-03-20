@@ -1,13 +1,46 @@
-"""
-Modulo di configurazione centralizzata dell'applicazione.
+# ----------------------------------------------------------------------
+# NOTE PER LA PRODUZIONE:
+#
+# 1. Ambiente e File .env:
+#    - Utilizza un file .env.production (o variabili d'ambiente sicure) per
+#      impostare i valori reali in produzione. Assicurati che ENV sia settato a "production".
+#
+# 2. Configurazioni Database:
+#    - Aggiorna DB_HOST, DB_PORT, DB_USER, DB_PASSWORD e DB_NAME con le credenziali
+#      del database di produzione (es. PostgreSQL, MySQL, ecc.).
+#    - Valuta l'utilizzo di SSL per la connessione (come indicato nella costruzione
+#      dell'URI) se necessario.
+#
+# 3. Sicurezza:
+#    - Imposta SECRET_KEY con una stringa sicura e complessa (minimo 32 caratteri).
+#    - Controlla che le impostazioni per JWT (ALGORITHM, token expire, ecc.) siano
+#      adeguate per la sicurezza in produzione.
+#
+# 4. Email e Servizi Esterni:
+#    - Configura correttamente SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD e EMAIL_FROM
+#      per l'invio di email.
+#    - Se usi servizi esterni come Twilio, WhatsApp o Stripe, verifica che le relative
+#      chiavi e endpoint siano corretti e sicuri.
+#
+# 5. CORS e Logging:
+#    - Aggiorna CORS_ORIGINS per permettere solo le origini autorizzate.
+#    - Rivedi LOG_LEVEL e LOG_FORMAT in base alle esigenze di monitoraggio e sicurezza.
+#
+# 6. Storage (S3):
+#    - Se STORAGE_TYPE è impostato a "s3", assicurati di aver configurato correttamente
+#      S3_BUCKET_NAME, S3_ACCESS_KEY, S3_SECRET_KEY e S3_REGION.
+#
+# 7. Altre Validazioni:
+#    - Verifica che settings.validate_settings() non sollevi eccezioni, per assicurarti
+#      che tutte le impostazioni obbligatorie siano presenti e corrette.
+#
+# In sintesi, in produzione dovrai:
+#    - Utilizzare variabili d'ambiente o file di configurazione separati e sicuri.
+#    - Aggiornare le credenziali e gli endpoint per il database e i servizi esterni.
+#    - Rivedere le impostazioni di sicurezza (SECRET_KEY, HTTPS, Secure Cookies, ecc.).
+#    - Limitare le origini permesse nelle richieste CORS.
+#
 
-Questo modulo definisce tutte le impostazioni necessarie per l'applicazione,
-gestendo diversi ambienti (sviluppo, produzione) tramite variabili d'ambiente
-e file .env specifici per ogni ambiente.
-
-La classe Settings utilizza Pydantic per la validazione e la gestione di tutte
-le configurazioni dell'applicazione.
-"""
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 from pydantic import Field, SecretStr, field_validator, model_validator, ConfigDict
