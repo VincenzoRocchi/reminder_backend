@@ -29,7 +29,7 @@ A comprehensive backend system for businesses to manage and send reminders to th
 
 ## Project Structure
 
-```
+```plaintext
 reminder_app/
 ├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
@@ -79,16 +79,21 @@ Each business using the platform will have their own account within the applicat
 
 1. Clone the repository
 2. Create a virtual environment:
+
    ```
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
+
 3. Install dependencies:
+
    ```
    pip install -r requirements.txt
    ```
+
 4. Copy `.env.example` to `.env` and configure environment variables
 5. Run database migrations:
+
    ```
    alembic upgrade head
    ```
@@ -101,7 +106,7 @@ Each business using the platform will have their own account within the applicat
 python main.py
 ```
 
-or 
+or
 
 ```
 uvicorn app.main:app --reload
