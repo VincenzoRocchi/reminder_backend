@@ -26,3 +26,11 @@ class Notification(Base):
     # Relationships
     reminder = relationship("Reminder", back_populates="notifications")
     recipient = relationship("User", foreign_keys=[recipient_id])
+    
+    def __str__(self):
+        status_str = self.status.value if self.status else "unknown"
+        return f"Notification: {self.notification_type} for recipient {self.recipient_id} ({status_str})"
+    
+    def __repr__(self):
+        sent_time = self.sent_at.strftime('%Y-%m-%d %H:%M') if self.sent_at else "Not sent"
+        return f"<Notification id={self.id} type={self.notification_type} to={self.recipient_id} status={self.status} sent={sent_time}>"

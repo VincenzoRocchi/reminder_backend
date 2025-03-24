@@ -48,7 +48,14 @@ class RateLimiter:
         # Add current request
         self.requests[key].append(current_time)
         return False
+    
+    # For debugging
+    def __str__(self):
+        limited_count = sum(1 for reqs in self.requests.values() if len(reqs) >= self.rate_limit)
+        return f"Rate Limiter ({limited_count}/{len(self.requests)} clients limited)"
 
+    def __repr__(self):
+        return f"<RateLimiter limit={self.rate_limit}/{self.time_window}s clients={len(self.requests)}>"
 
 # Create rate limiters for different endpoints
 login_limiter = RateLimiter(5, 60)  # 5 attempts per minute

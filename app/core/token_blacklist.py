@@ -33,7 +33,13 @@ class InMemoryTokenBlacklist:
         
         for jti in expired_tokens:
             del self._blacklist[jti]
+            
+    # For debugging
+    def __str__(self):
+        return f"Token Blacklist ({len(self._blacklist)} tokens)"
 
+    def __repr__(self):
+        return f"<InMemoryTokenBlacklist tokens={len(self._blacklist)}>"     
 
 # For production, implement a Redis-based blacklist:
 # class RedisTokenBlacklist:

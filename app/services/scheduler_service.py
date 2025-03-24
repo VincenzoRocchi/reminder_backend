@@ -258,6 +258,21 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Error calculating next reminder date: {str(e)}")
             return None
+        
+        # Add to the existing SchedulerService class
+    def __str__(self):
+        status = "running" if hasattr(self, 'scheduler') and getattr(self.scheduler, 'running', False) else "stopped"
+        job_count = len(self.scheduler.get_jobs()) if hasattr(self, 'scheduler') else 0
+        return f"Reminder Scheduler Service ({status}, {job_count} jobs)"
+
+    def __repr__(self):
+        if hasattr(self, 'scheduler'):
+            status = 'running' if getattr(self.scheduler, 'running', False) else 'stopped'
+            job_count = len(self.scheduler.get_jobs())
+        else:
+            status = 'uninitialized'
+            job_count = 0
+        return f"<SchedulerService status={status} jobs={job_count}>"
 
 
 # Create a singleton instance

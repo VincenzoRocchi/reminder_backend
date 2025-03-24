@@ -18,3 +18,9 @@ class Customer(Base):
     zip_code = Column(String)
     country = Column(String)
     phone_number = Column(String)
+    
+    def __str__(self):
+        return f"Customer: {self.name} {self.last_name}"
+    
+    def __repr__(self):
+        return f"<Customer id={self.id} name='{self.name} {self.last_name}' email='{self.email}'>"
