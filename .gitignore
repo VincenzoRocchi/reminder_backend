@@ -7,7 +7,7 @@ wheels/
 *.egg-info
 #.python-version
 #pyproject.toml
-#uv.lock
+uv.lock
 tempCodeRunnerFile.py
 dbtest.py
 psw.txt
