@@ -9,7 +9,14 @@ from alembic import context
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from app.models import business, reminder, notification, users
+
+# Import all models to ensure they're included in migrations
+from app.models.users import User
+from app.models.serviceAccounts import ServiceAccount, ServiceTypeEnum
+from app.models.clients import Client
+from app.models.reminders import Reminder, ReminderTypeEnum, NotificationType
+from app.models.reminderRecipient import ReminderRecipient
+from app.models.notifications import Notification, NotificationStatusEnum
 from app.database import Base
 from app.core.settings import settings
 
@@ -18,6 +25,7 @@ from app.core.settings import settings
 config = context.config
 
 # Override the sqlalchemy.url from the settings
+# This is where we fix the placeholder_url issue
 config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
 
 # Interpret the config file for Python logging.
