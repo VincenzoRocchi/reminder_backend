@@ -1,3 +1,8 @@
+from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import relationship
+
+from app.database import Base
+
 class ReminderRecipient(Base):
     __tablename__ = "reminder_recipients"
     
@@ -11,3 +16,9 @@ class ReminderRecipient(Base):
     # Relationships
     reminder = relationship("Reminder", back_populates="reminder_recipients")
     client = relationship("Client", back_populates="reminder_recipients")
+    
+    def __str__(self):
+        return f"ReminderRecipient: Reminder {self.reminder_id} - Client {self.client_id}"
+        
+    def __repr__(self):
+        return f"<ReminderRecipient reminder_id={self.reminder_id} client_id={self.client_id}>"

@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, Date
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 class Client(Base):
@@ -19,3 +22,9 @@ class Client(Base):
     user = relationship("User", back_populates="clients")
     reminder_recipients = relationship("ReminderRecipient", back_populates="client", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="client", cascade="all, delete-orphan")
+    
+    def __str__(self):
+        return f"Client: {self.name} (User ID: {self.user_id})"
+        
+    def __repr__(self):
+        return f"<Client id={self.id} name='{self.name}' user_id={self.user_id}>"
