@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.users import User as UserModel
 from app.models.reminder import Reminder as ReminderModel
 from app.models.notification import Notification as NotificationModel
-from app.schemas.notification import Notification, NotificationUpdate
+from app.schemas.notifications import Notification, NotificationUpdate
 
 router = APIRouter()
 

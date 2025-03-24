@@ -8,7 +8,7 @@ from app.models.users import User as UserModel
 from app.models.business import Business as BusinessModel
 from app.models.reminder import Reminder as ReminderModel
 from app.models.notification import Notification as NotificationModel
-from app.schemas.reminder import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
+from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
 
 router = APIRouter()
 

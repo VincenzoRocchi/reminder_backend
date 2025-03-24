@@ -6,26 +6,24 @@ from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
-
 class WhatsAppService:
     """
     Service for sending WhatsApp notifications
-    
-    Note: This is a placeholder implementation. You'll need to replace this
-    with your actual WhatsApp Business API provider (like Twilio, MessageBird, etc.)
     """
     
     @staticmethod
     async def send_whatsapp(
-        business,  # Add business parameter
+        service_account,
+        user,  # Add user parameter
         recipient_phone: str,
         message: str,
     ) -> bool:
         """
-        Send a WhatsApp message to a recipient using business-specific WhatsApp API settings.
+        Send a WhatsApp message to a recipient using service account WhatsApp API settings.
         
         Args:
-            business: Business object with WhatsApp API settings
+            service_account: ServiceAccount object with WhatsApp API settings
+            user: User who owns the service account
             recipient_phone: Phone number of the recipient (E.164 format)
             message: Content of the WhatsApp message
             
@@ -33,16 +31,16 @@ class WhatsAppService:
             True if message was sent successfully, False otherwise
         """
         try:
-            # Check if business has WhatsApp API configured
-            if not business.whatsapp_api_key or not business.whatsapp_api_url:
-                logger.warning(f"Business {business.id} has no WhatsApp API settings configured, falling back to global settings")
-                # Fall back to global settings if business settings not available
+            # Check if service account has WhatsApp API configured
+            if not service_account.whatsapp_api_key or not service_account.whatsapp_api_url:
+                logger.warning(f"Service account {service_account.id} has no WhatsApp API settings configured, falling back to global settings")
+                # Fall back to global settings if service account settings not available
                 api_key = settings.WHATSAPP_API_KEY
                 api_url = settings.WHATSAPP_API_URL
             else:
-                # Use business-specific settings
-                api_key = business.whatsapp_api_key
-                api_url = business.whatsapp_api_url
+                # Use service account specific settings
+                api_key = service_account.whatsapp_api_key
+                api_url = service_account.whatsapp_api_url
             
             # Check if WhatsApp API credentials are configured
             if not api_key or not api_url:
@@ -87,7 +85,8 @@ class WhatsAppService:
     
     @staticmethod
     async def send_reminder_whatsapp(
-        business,  # Add business parameter
+        service_account,
+        user,  # Add user parameter
         recipient_phone: str,
         reminder_title: str,
         reminder_description: Optional[str],
@@ -96,7 +95,8 @@ class WhatsAppService:
         Send a reminder via WhatsApp.
         
         Args:
-            business: Business object with WhatsApp API settings
+            service_account: ServiceAccount object with WhatsApp API settings
+            user: User who owns the service account
             recipient_phone: Phone number of the recipient
             reminder_title: Title of the reminder
             reminder_description: Description of the reminder
@@ -104,15 +104,19 @@ class WhatsAppService:
         Returns:
             True if message was sent successfully, False otherwise
         """
+        # Use business name if available, otherwise use username
+        sender_name = user.business_name or user.username
+        
         # Create message content
-        message = f"*Reminder: {reminder_title}*\nFrom: {business.name}"
+        message = f"*Reminder: {reminder_title}*\nFrom: {sender_name}"
         
         # Add description if provided
         if reminder_description:
             message += f"\n\n{reminder_description}"
         
         return await WhatsAppService.send_whatsapp(
-            business=business,
+            service_account=service_account,
+            user=user,
             recipient_phone=recipient_phone,
             message=message,
         )

@@ -7,13 +7,16 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 
 from app.database import SessionLocal
-from app.models.reminder import Reminder, NotificationType
-from app.models.notification import Notification, ReminderStatus
+from app.models.reminders import Reminder, NotificationType
+from app.models.notifications import Notification, ReminderStatus
 from app.models.users import User
 from app.models.business import Business
 from app.services.email_service import EmailService
 from app.services.sms_service import SMSService
 from app.services.whatsapp_service import WhatsAppService
+from app.models.serviceAccounts import ServiceAccount
+from app.models.clients import Client
+from app.models.reminderRecipient import ReminderRecipient
 
 # Configure module-level logger for this service
 # This allows targeted log filtering and appropriate log levels
@@ -75,76 +78,102 @@ class SchedulerService:
     async def process_reminders(self):
         """
         Process reminders that are due to be sent.
-        
-        This method is the core business logic for reminder processing:
-        1. Retrieves active reminders that have reached their scheduled time
-        2. For each reminder, processes all pending notifications
-        3. Handles recurring reminders by calculating the next occurrence
-        4. Updates reminder and notification statuses
-        
-        Database transactions ensure data consistency even if errors occur.
         """
         logger.info("Processing due reminders")
         
-        # Create a new DB session for this processing cycle
-        # This ensures DB connection isolation and proper resource cleanup
         db = SessionLocal()
         try:
-            # Get current time for comparison with reminder scheduled times
             now = datetime.now()
             
             # Find reminders that are due and active
-            # The dual filter ensures we only process relevant reminders
             due_reminders = (
                 db.query(Reminder)
                 .filter(
-                    Reminder.reminder_date <= now,  # Due or overdue reminders
-                    Reminder.is_active == True      # Only process active reminders
+                    Reminder.reminder_date <= now,
+                    Reminder.is_active == True
                 )
                 .all()
             )
             
-            # Process each due reminder individually
             for reminder in due_reminders:
-                # Get business info - we need to verify business is active
-                # This prevents sending reminders for deactivated businesses
-                business = db.query(Business).filter(Business.id == reminder.business_id).first()
-                if not business or not business.is_active:
-                    # Skip reminders for inactive businesses
-                    # This is a safeguard against notifications for decommissioned accounts
+                # Get the user who created the reminder
+                user = db.query(User).filter(User.id == reminder.user_id).first()
+                if not user or not user.is_active:
+                    continue
+                    
+                # Get the service account for this reminder
+                service_account = None
+                if reminder.service_account_id:
+                    service_account = db.query(ServiceAccount).filter(
+                        ServiceAccount.id == reminder.service_account_id,
+                        ServiceAccount.is_active == True
+                    ).first()
+                
+                # If no specific service account is provided, try to find a default one
+                if not service_account:
+                    service_account = db.query(ServiceAccount).filter(
+                        ServiceAccount.user_id == user.id,
+                        ServiceAccount.service_type == reminder.notification_type,
+                        ServiceAccount.is_active == True
+                    ).first()
+                    
+                # Skip if no valid service account is found
+                if not service_account:
+                    logger.warning(f"No active service account found for reminder {reminder.id} with type {reminder.notification_type}")
                     continue
                 
-                # Get pending notifications for this reminder
-                # We only process notifications that haven't been sent yet
-                pending_notifications = (
-                    db.query(Notification)
-                    .filter(
-                        Notification.reminder_id == reminder.id,
-                        Notification.status == ReminderStatus.PENDING
-                    )
+                # Get all clients for this reminder
+                recipient_mappings = (
+                    db.query(ReminderRecipient)
+                    .filter(ReminderRecipient.reminder_id == reminder.id)
                     .all()
                 )
                 
-                # Process each pending notification for this reminder
-                for notification in pending_notifications:
-                    # Get recipient info - we need to verify recipient is active
-                    # This prevents sending to deactivated or removed users
-                    recipient = db.query(User).filter(User.id == notification.recipient_id).first()
-                    if not recipient or not recipient.is_active:
-                        # Skip notifications for inactive recipients
-                        continue
-                    
-                    # Send notification based on the configured channel type
-                    # This polymorphic approach allows flexible notification channels
-                    success = await self.send_notification(
-                        notification_type=notification.notification_type,
-                        recipient=recipient,
-                        reminder=reminder,
-                        business=business  # Pass business for branding/sender information
+                client_ids = [mapping.client_id for mapping in recipient_mappings]
+                clients = db.query(Client).filter(Client.id.in_(client_ids), Client.is_active == True).all()
+                
+                # Process each client
+                for client in clients:
+                    # Check if a notification already exists
+                    existing_notification = (
+                        db.query(Notification)
+                        .filter(
+                            Notification.reminder_id == reminder.id,
+                            Notification.client_id == client.id,
+                            Notification.status.in_([ReminderStatus.PENDING, ReminderStatus.SENT])
+                        )
+                        .first()
                     )
                     
-                    # Update notification status based on send result
-                    # This provides an audit trail of notification attempts
+                    # Skip if already processed
+                    if existing_notification and existing_notification.status == ReminderStatus.SENT:
+                        continue
+                    
+                    # Create a new notification if one doesn't exist
+                    if not existing_notification:
+                        notification = Notification(
+                            reminder_id=reminder.id,
+                            client_id=client.id,
+                            notification_type=reminder.notification_type,
+                            message=reminder.description,
+                            status=ReminderStatus.PENDING
+                        )
+                        db.add(notification)
+                        db.commit()
+                        db.refresh(notification)
+                    else:
+                        notification = existing_notification
+                    
+                    # Send the notification
+                    success = await self.send_notification(
+                        notification_type=reminder.notification_type,
+                        service_account=service_account,
+                        user=user,
+                        client=client,
+                        reminder=reminder
+                    )
+                    
+                    # Update notification status
                     notification.sent_at = datetime.now()
                     if success:
                         notification.status = ReminderStatus.SENT
@@ -152,141 +181,87 @@ class SchedulerService:
                         notification.status = ReminderStatus.FAILED
                         notification.error_message = "Failed to send notification"
                     
-                    # Mark notification for update in database
                     db.add(notification)
                 
                 # Handle recurring reminders
-                # If the reminder is configured to repeat, calculate the next occurrence
                 if reminder.is_recurring and reminder.recurrence_pattern:
-                    # Calculate the next reminder date based on pattern
                     next_date = self.calculate_next_reminder_date(
                         reminder.reminder_date, reminder.recurrence_pattern
                     )
                     if next_date:
-                        # Update reminder with new future date
                         reminder.reminder_date = next_date
                     else:
-                        # If pattern is invalid, deactivate to prevent endless retries
                         reminder.is_active = False
-                        logger.warning(
-                            f"Deactivating reminder {reminder.id} due to invalid recurrence pattern: "
-                            f"'{reminder.recurrence_pattern}'"
-                        )
                 else:
-                    # Non-recurring reminders are one-time only
-                    # Deactivate after processing to prevent duplicate sending
                     reminder.is_active = False
                 
-                # Mark reminder for update in database
                 db.add(reminder)
-            
-            # Commit all changes in a single transaction
-            # This ensures atomic updates and prevents partial state changes
+                
             db.commit()
             
         except Exception as e:
-            # Log detailed error information for troubleshooting
-            # This provides operational visibility for production monitoring
             logger.error(f"Error processing reminders: {str(e)}", exc_info=True)
-            
-            # No explicit rollback needed as it will happen in the finally block
-            # when the session is closed without a prior commit
         finally:
-            # Always close the DB session to prevent connection leaks
-            # This is crucial for long-running services to maintain DB health
             db.close()
-    
+            
     async def send_notification(
         self,
         notification_type: NotificationType,
-        recipient: User,
-        reminder: Reminder,
-        business: Business  # Business context for the notification
+        service_account,
+        user,
+        client,
+        reminder,
     ) -> bool:
         """
-        Send a notification based on its configured channel type.
-        
-        This method routes the notification to the appropriate service
-        based on the notification type, ensuring proper formatting and
-        delivery for each channel.
-        
-        Args:
-            notification_type: Channel to use (EMAIL, SMS, WHATSAPP)
-            recipient: User object containing contact information
-            reminder: Reminder details including title and description
-            business: Business object for sender information and branding
-            
-        Returns:
-            True if notification was sent successfully, False otherwise
+        Send a notification based on its configured type.
         """
         try:
-            # Route to appropriate notification service based on type
-            # Each channel has specific requirements and formatting
-            
             if notification_type == NotificationType.EMAIL:
-                # Email notifications require a valid email address
-                if not recipient.email:
-                    logger.warning(
-                        f"Cannot send email notification: Missing email for user {recipient.id}"
-                    )
+                if not client.email:
+                    logger.warning(f"Cannot send email notification: Missing email for client {client.id}")
                     return False
                 
-                # Use email service to format and send the message
-                # Await ensures we get the actual result before proceeding
                 return await EmailService.send_reminder_email(
-                    business=business,  # For email branding and sender info
-                    recipient_email=recipient.email,
+                    service_account=service_account,
+                    user=user,
+                    recipient_email=client.email,
                     reminder_title=reminder.title,
-                    reminder_description=reminder.description or "",  # Handle null description
+                    reminder_description=reminder.description or "",
                 )
                 
             elif notification_type == NotificationType.SMS:
-                # SMS notifications require a valid phone number
-                if not recipient.phone_number:
-                    logger.warning(
-                        f"Cannot send SMS notification: Missing phone number for user {recipient.id}"
-                    )
+                if not client.phone_number:
+                    logger.warning(f"Cannot send SMS notification: Missing phone number for client {client.id}")
                     return False
                 
-                # Use SMS service to format and send the text message
-                # Note: Not async - assumed to be a synchronous operation
                 return SMSService.send_reminder_sms(
-                    business=business,  # For sender identification
-                    recipient_phone=recipient.phone_number,
+                    service_account=service_account,
+                    user=user,
+                    recipient_phone=client.phone_number,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
                 )
                 
             elif notification_type == NotificationType.WHATSAPP:
-                # WhatsApp notifications require a valid phone number
-                if not recipient.phone_number:
-                    logger.warning(
-                        f"Cannot send WhatsApp notification: Missing phone number for user {recipient.id}"
-                    )
+                if not client.phone_number:
+                    logger.warning(f"Cannot send WhatsApp notification: Missing phone number for client {client.id}")
                     return False
                 
-                # Use WhatsApp service to format and send the message
-                # Await ensures we get the actual result before proceeding
                 return await WhatsAppService.send_reminder_whatsapp(
-                    business=business,  # For sender identification
-                    recipient_phone=recipient.phone_number,
+                    service_account=service_account,
+                    user=user,
+                    recipient_phone=client.phone_number,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
                 )
             
-            # Handle unsupported notification types
             logger.error(f"Unsupported notification type: {notification_type}")
             return False
             
         except Exception as e:
-            # Log detailed error for operational monitoring
-            # Capture service-specific failures for troubleshooting
-            logger.error(
-                f"Error sending {notification_type} notification: {str(e)}", 
-                exc_info=True
-            )
+            logger.error(f"Error sending {notification_type} notification: {str(e)}", exc_info=True)
             return False
-    
+        
     def calculate_next_reminder_date(self, current_date: datetime, pattern: str) -> datetime:
         """
         Calculate the next reminder date based on the recurrence pattern.

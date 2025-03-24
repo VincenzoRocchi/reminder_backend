@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.clients import Customer
-from app.schemas.customer import CustomerCreate, CustomerResponse, CustomerUpdate
+from app.schemas.clients import CustomerCreate, CustomerResponse, CustomerUpdate
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
