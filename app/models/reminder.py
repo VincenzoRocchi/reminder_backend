@@ -48,3 +48,11 @@ class Reminder(Base):
     business = relationship("Business", back_populates="reminders")
     creator = relationship("User", foreign_keys=[created_by])
     notifications = relationship("Notification", back_populates="reminder", cascade="all, delete-orphan")
+    
+    def __str__(self):
+        status = "active" if getattr(self, "is_active", False) else "inactive"
+        return f"Reminder: {self.title} ({status}) - {self.reminder_date.strftime('%Y-%m-%d %H:%M')}"
+
+    def __repr__(self):
+        recurrence = f", recurs: {self.recurrence_pattern}" if getattr(self, "is_recurring", False) else ""
+        return f"<Reminder id={self.id} title='{self.title}' date='{self.reminder_date}' type={self.notification_type}{recurrence} active={self.is_active}>"

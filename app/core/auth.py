@@ -25,7 +25,6 @@ async def get_current_user(
         
     Returns:
         User object if token is valid
-        
     Raises:
         HTTPException: If token is invalid or user not found
     """
