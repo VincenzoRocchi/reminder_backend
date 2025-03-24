@@ -1,3 +1,35 @@
+# ----------------------------------------------------------------------
+# NOTE PER LA PRODUZIONE:
+#
+# 1. Gestione delle Chiavi e del Salt:
+#    - Assicurati che SECRET_KEY in settings sia sufficientemente lungo e complesso.
+#    - Verifica che il valore di ENCRYPTION_SALT (se impostato tramite variabile d'ambiente)
+#      venga gestito in modo sicuro e costante tra i deployment.
+#
+# 2. Algoritmi e Parametri di Derivazione:
+#    - I parametri usati (es. iterazioni in PBKDF2HMAC) sono adeguati per l'ambiente di produzione;
+#      valuta di aumentare il numero di iterazioni se il carico di CPU lo permette.
+#
+# 3. Logging:
+#    - In produzione, imposta un livello di logging adeguato (ad es. WARNING o ERROR) per non
+#      esporre informazioni sensibili o generare log troppo verbosi.
+#
+# 4. Sicurezza Generale:
+#    - Verifica che l'uso dei meccanismi di cifratura (Fernet per stringhe, AES per bytes) sia
+#      conforme ai requisiti di sicurezza dell'applicazione.
+#    - Assicurati che le chiavi generate non siano mai hard-coded e vengano fornite tramite un
+#      sistema di secret management o variabili d'ambiente sicure.
+#
+# 5. Integrazione con Pydantic:
+#    - Se utilizzi il metodo create_encrypted_model per modelli Pydantic, verifica che la logica
+#      di validazione e decrittazione funzioni correttamente in tutti i casi d'uso in produzione.
+#
+# In sintesi, in produzione dovrai:
+#    - Utilizzare una chiave segreta robusta e un salt costante e sicuro.
+#    - Valutare i parametri di derivazione delle chiavi per garantire la sicurezza senza compromettere
+#      le prestazioni.
+#    - Configurare il logging in modo che non vengano esposte informazioni sensibili.
+
 import base64
 import os
 import logging
@@ -125,7 +157,7 @@ class EncryptionService:
         
         try:
             encrypted_data = self._fernet.encrypt(data.encode())
-            return encrypted_data.decode()
+            return f"v1:{encrypted_data.decode()}"
         except Exception as e:
             logger.error(f"Error encrypting string: {str(e)}")
             raise RuntimeError(f"Encryption failed: {str(e)}")
@@ -144,8 +176,15 @@ class EncryptionService:
             return ""
         
         try:
-            decrypted_data = self._fernet.decrypt(encrypted_data.encode())
-            return decrypted_data.decode()
+            # Handle versioned encryption
+            if encrypted_data.startswith("v1:"):
+                # Version 1 encryption scheme
+                actual_data = encrypted_data[3:]  # Remove "v1:" prefix
+                decrypted_data = self._fernet.decrypt(actual_data.encode())
+                return decrypted_data.decode()
+            else:
+                decrypted_data = self._fernet.decrypt(encrypted_data.encode())
+                return decrypted_data.decode()
         except Exception as e:
             logger.error(f"Error decrypting string: {str(e)}")
             raise RuntimeError(f"Decryption failed: {str(e)}")

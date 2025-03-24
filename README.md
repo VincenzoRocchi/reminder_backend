@@ -226,6 +226,68 @@ Apply migrations:
 alembic upgrade head
 ```
 
+--------------------------------------------# Security and Authentication Enhancements #-------------------------
+
+## Security Headers
+
+We've implemented a custom middleware that adds essential security headers to every API response:
+
+- **X-Content-Type-Options: nosniff** - Prevents browsers from interpreting files as a different MIME type than declared, reducing XSS risks
+- **X-Frame-Options: DENY** - Prevents our application from being embedded in iframes, protecting against clickjacking attacks
+- **X-XSS-Protection: 1; mode=block** - Enables browser's built-in XSS filtering capabilities
+- **Strict-Transport-Security** (Production Only) - Enforces HTTPS connections for increased transport security
+- **Content-Security-Policy** (Production Only) - Controls which resources the browser is allowed to load
+
+## Transport Security
+
+In production environments, the application automatically redirects all HTTP requests to HTTPS, ensuring all client-server communication is encrypted. This is implemented via FastAPI's HTTPSRedirectMiddleware.
+
+## Host Validation
+
+To prevent HTTP Host header attacks and DNS rebinding attacks, we've implemented TrustedHostMiddleware in production environments. This ensures that requests are only accepted from explicitly defined hosts.
+
+## Enhanced CORS Configuration
+
+We've improved Cross-Origin Resource Sharing (CORS) configuration by:
+
+- Using specific origins from settings instead of wildcard allowances
+- Explicitly listing allowed HTTP methods rather than allowing all methods
+- Restricting allowed headers to only those needed by the application
+- Configuring credentials handling properly based on environment requirements
+
+## Authentication Improvements
+
+The authentication system has been enhanced with:
+
+- **Refresh Token Support** - Implements the OAuth2 refresh token flow for improved user experience
+- **Token Blacklisting** - Prevents reuse of invalidated tokens, improving security after logout
+- **Token Versioning** - Supports future authentication scheme changes without breaking existing sessions
+- **Enhanced Validation** - Adds explicit checks for token expiration and validity
+
+## Data Protection
+
+Sensitive data protection has been improved with:
+
+- **Versioned Encryption** - Adds versioning to encrypted data to support future cryptographic upgrades
+- **Key Rotation Support** - Architecture supports cryptographic key rotation for long-term security
+- **Granular Exception Handling** - More specific error types for different security scenarios
+
+## Rate Limiting
+
+Authentication endpoints are now protected with rate limiting to prevent brute force attacks:
+
+- Login attempts are limited to prevent password guessing
+- Account creation is rate-limited to prevent abuse
+- Implements progressive delays for repeated failed attempts
+
+## Environment-Based Security
+
+Security features are applied contextually based on the environment:
+
+- Development environments maintain security while enabling debugging
+- Production environments enforce the strictest security controls
+- Testing environments allow for security testing without interference
+
 ## Validation Settings
 
 The application supports two validation modes:

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-
+from typing import Optional
 
 class Token(BaseModel):
     """
@@ -7,10 +7,13 @@ class Token(BaseModel):
     """
     access_token: str
     token_type: str
+    refresh_token: Optional[str] = None
 
 
 class TokenPayload(BaseModel):
     """
     Schema for JWT token payload
     """
-    sub: int = None
+    sub: Optional[int] = None
+    token_type: Optional[str] = None  # "access" or "refresh"
+    exp: Optional[int] = None
