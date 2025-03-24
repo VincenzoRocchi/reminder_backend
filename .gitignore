@@ -13,6 +13,7 @@ tempCodeRunnerFile.python
 dbtest.py
 psw.txt
 pyproject.toml
+.vscode
 
 # Virtual environments
 .venv
