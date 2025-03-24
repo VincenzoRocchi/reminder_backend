@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
@@ -11,11 +11,11 @@ from app.schemas.user import User, UserCreate, UserUpdate, UserWithRelations
 router = APIRouter()
 
 @router.get("/", response_model=List[User])
-def read_users(
-    db: Session = Depends(get_db),
+async def read_users(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
     skip: int = 0,
     limit: int = 100,
-    current_user: UserModel = Depends(get_current_active_superuser),
 ):
     """
     Retrieve users. Only superusers can access this endpoint.
@@ -24,22 +24,24 @@ def read_users(
     return users
 
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
-def create_user(
-    user_in: UserCreate,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_superuser),
+async def create_user(
+    user_in: Annotated[UserCreate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
 ):
     """
     Create new user. Only superusers can create new users.
     """
     # Check if user with this email or username exists
-    if db.query(UserModel).filter(UserModel.email == user_in.email).first():
+    db_user_email = db.query(UserModel).filter(UserModel.email == user_in.email).first()
+    if db_user_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
     
-    if db.query(UserModel).filter(UserModel.username == user_in.username).first():
+    db_user_username = db.query(UserModel).filter(UserModel.username == user_in.username).first()
+    if db_user_username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken"
@@ -57,78 +59,79 @@ def create_user(
         is_active=user_in.is_active,
         is_superuser=False,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
     return user
 
-@router.get("/me", response_model=UserWithRelations)
-def read_user_me(
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+@router.get("/me", response_model=User)
+async def read_user_me(
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
-    Get current user with relationship statistics.
+    Get current user information.
     """
-    # Count related items
-    service_accounts_count = db.query(ServiceAccount).filter(ServiceAccount.user_id == current_user.id).count()
-    clients_count = db.query(Client).filter(Client.user_id == current_user.id).count()
-    reminders_count = db.query(Reminder).filter(Reminder.user_id == current_user.id).count()
-    
-    # Create response
-    user_data = User.from_orm(current_user).dict()
-    user_data.update({
-        "service_accounts_count": service_accounts_count,
-        "clients_count": clients_count,
-        "reminders_count": reminders_count,
-    })
-    
-    return UserWithRelations(**user_data)
+    return current_user
 
 @router.get("/{user_id}", response_model=User)
-def read_user(
+async def read_user(
     user_id: int,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
     Get a specific user by id.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
     if user.id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
+            detail="Not enough permissions"
         )
     
     return user
 
 @router.put("/{user_id}", response_model=User)
-def update_user(
+async def update_user(
     user_id: int,
-    user_in: UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    user_in: Annotated[UserUpdate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
     Update a user.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
     # Only allow updating yourself or if you're admin
     if user.id != current_user.id and not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions",
+            detail="Not enough permissions"
         )
     
     # Update fields
-    update_data = user_in.dict(exclude_unset=True)
+    update_data = user_in.model_dump(exclude_unset=True)
     
     # Handle password separately
     if "password" in update_data:
@@ -136,35 +139,70 @@ def update_user(
         del update_data["password"]
         update_data["hashed_password"] = hashed_password
     
+    # If email is being updated, check if it's already taken
+    if "email" in update_data and update_data["email"] != user.email:
+        if db.query(UserModel).filter(UserModel.email == update_data["email"]).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+    
+    # If username is being updated, check if it's already taken
+    if "username" in update_data and update_data["username"] != user.username:
+        if db.query(UserModel).filter(UserModel.username == update_data["username"]).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+    
     for field, value in update_data.items():
         setattr(user, field, value)
     
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
     return user
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(
+async def delete_user(
     user_id: int,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_superuser),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
 ):
     """
     Delete a user. Only superusers can delete users.
     """
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
-    db.delete(user)
-    db.commit()
+    try:
+        db.delete(user)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
     return {"detail": "User deleted successfully"}
 
 @router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
-def register_user(
-    user_in: UserCreate,
-    db: Session = Depends(get_db),
+async def register_user(
+    user_in: Annotated[UserCreate, Body()],
+    db: Annotated[Session, Depends(get_db)],
 ):
     """
     Register a new user without requiring existing authentication.
@@ -194,7 +232,16 @@ def register_user(
         is_active=True,
         is_superuser=False,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
     return user
