@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.models.users import User
 from app.models.serviceAccounts import ServiceAccount, ServiceTypeEnum
 from app.models.clients import Client
-from app.models.reminders import Reminder, ReminderTypeEnum, NotificationType
+from app.models.reminders import Reminder, ReminderTypeEnum, NotificationTypeEnum
 from app.models.reminderRecipient import ReminderRecipient
 from app.models.notifications import Notification, NotificationStatusEnum
 from app.database import Base

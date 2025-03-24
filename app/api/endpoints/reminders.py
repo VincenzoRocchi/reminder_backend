@@ -6,7 +6,7 @@ from datetime import datetime
 from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.users import User as UserModel
-from app.models.reminders import Reminder as ReminderModel, NotificationType
+from app.models.reminders import Reminder as ReminderModel, NotificationTypeEnum
 from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel
 from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient

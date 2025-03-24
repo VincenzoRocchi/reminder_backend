@@ -10,7 +10,6 @@ from app.database import SessionLocal
 from app.models.reminders import Reminder, NotificationType
 from app.models.notifications import Notification, ReminderStatus
 from app.models.users import User
-from app.models.business import Business
 from app.services.email_service import EmailService
 from app.services.sms_service import SMSService
 from app.services.whatsapp_service import WhatsAppService
