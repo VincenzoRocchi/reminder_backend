@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_current_active_superuser
 from app.core.security import get_password_hash
 from app.database import get_db
-from app.models.user import User as UserModel
+from app.models.users import User as UserModel
 from app.schemas.user import User, UserCreate, UserUpdate
 
 router = APIRouter()

@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.user import User
+from app.models.users import User
 
 
 def test_create_user(client, superuser_token_headers):

@@ -6,26 +6,20 @@ from app.database import Base
 
 
 class User(Base):
-    """
-    User database model
-    """
     __tablename__ = "users"
-
+    
     id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(255), unique=True, nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    full_name = Column(String(255), nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    phone_number = Column(String(20))
+    first_name = Column(String(255), nullable=True)
+    last_name = Column(String(255), nullable=True)
+    business_name = Column(String(255), nullable=True)  # Optional for business users
     is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Relationships
-    businesses = relationship("Business", back_populates="owner")
     
-    def __str__(self):
-        return f"User: {self.full_name} ({self.email})"
-
-    def __repr__(self):
-        return f"<User id={self.id} email='{self.email}' active={self.is_active} super={self.is_superuser}>"
+    # Relationships
+    service_accounts = relationship("ServiceAccount", back_populates="user", cascade="all, delete-orphan")
+    clients = relationship("Client", back_populates="user", cascade="all, delete-orphan")
+    reminders = relationship("Reminder", back_populates="user", cascade="all, delete-orphan")

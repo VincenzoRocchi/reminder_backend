@@ -9,7 +9,7 @@ from alembic import context
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from app.models import user, business, reminder, notification
+from app.models import business, reminder, notification, users
 from app.database import Base
 from app.core.settings import settings
 

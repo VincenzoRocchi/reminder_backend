@@ -9,7 +9,7 @@ from typing import Dict, Any
 from app.database import SessionLocal
 from app.models.reminder import Reminder, NotificationType
 from app.models.notification import Notification, ReminderStatus
-from app.models.user import User
+from app.models.users import User
 from app.models.business import Business
 from app.services.email_service import EmailService
 from app.services.sms_service import SMSService
