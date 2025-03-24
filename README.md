@@ -99,11 +99,6 @@ Each business using the platform (such as accounting firms) will have their own 
 
 ### Installation
 
-<<<<<<< HEAD
-1. Clone the repository
-2. Create a virtual environment:
-
-=======
 #### Option 1: Using uv (Recommended)
 
 uv is a fast Python package installer and resolver that can significantly speed up dependency installation.
@@ -112,7 +107,6 @@ uv is a fast Python package installer and resolver that can significantly speed 
 
    ```bash
    winget install --id=astral-sh.uv  -e
->>>>>>> wip_vincenzo
    ```
 
 2. Clone the repository:
@@ -166,15 +160,6 @@ uv is a fast Python package installer and resolver that can significantly speed 
 
 3. Install dependencies:
 
-<<<<<<< HEAD
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. Copy `.env.example` to `.env` and configure environment variables
-5. Run database migrations:
-
-=======
    ```bash
    pip install -r requirements.txt
    ```
@@ -184,7 +169,6 @@ uv is a fast Python package installer and resolver that can significantly speed 
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
->>>>>>> wip_vincenzo
    ```
 
 5. Run database migrations:
