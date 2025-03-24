@@ -246,3 +246,17 @@ class Business(Base):
             self._whatsapp_api_key = original_value
             logger.error(f"WhatsApp key storage failed | BizID:{self.id} | TraceID:{uuid.uuid4()}")
             raise SensitiveDataStorageError("WhatsApp API key") from e
+        
+    def __str__(self):
+        return f"Business: {self.name}"
+
+    def __repr__(self):
+        notification_methods = []
+        if self.smtp_host and self.smtp_user:
+            notification_methods.append("email")
+        if self.twilio_account_sid:
+            notification_methods.append("sms")
+        if getattr(self, 'whatsapp_api_key', None):
+            notification_methods.append("whatsapp")
+            
+        return f"<Business id={self.id} name='{self.name}' owner_id={self.owner_id} active={self.is_active} notifications={notification_methods}>"

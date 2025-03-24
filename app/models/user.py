@@ -23,3 +23,9 @@ class User(Base):
 
     # Relationships
     businesses = relationship("Business", back_populates="owner")
+    
+def __str__(self):
+    return f"User: {self.full_name} ({self.email})"
+
+def __repr__(self):
+    return f"<User id={self.id} email='{self.email}' active={self.is_active} super={self.is_superuser}>"
