@@ -28,7 +28,7 @@ class ProductionSettings(BaseAppSettings):
         
     @field_validator('SQLALCHEMY_DATABASE_URI')
     def validate_db_uri(cls, v):
-        if v and ('sqlite' in v.lower()):
+        if v and 'sqlite' in v.lower():
             raise ValueError("Production must use a proper database, not SQLite")
         return v
         
