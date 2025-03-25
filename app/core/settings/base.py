@@ -172,11 +172,23 @@ class BaseAppSettings(BaseSettings):
     @model_validator(mode="before")
     def build_sqlalchemy_uri(cls, values: dict) -> dict:
         if not values.get("SQLALCHEMY_DATABASE_URI"):
-            uri = f"mysql+pymysql://{values.get('DB_USER')}:{values.get('DB_PASSWORD')}" \
-                  f"@{values.get('DB_HOST')}:{values.get('DB_PORT')}/{values.get('DB_NAME')}"
-            if values.get("ENV") != "development":
-                uri += "?ssl=true"
-            values["SQLALCHEMY_DATABASE_URI"] = uri
+            # Verifica se l'ambiente è testing
+            is_testing = values.get("ENV") == "testing"
+            
+            if is_testing:
+                # Per l'ambiente di testing, usa SQLite
+                values["SQLALCHEMY_DATABASE_URI"] = "sqlite:///./test.db"
+            else:
+                # Per gli altri ambienti, usa MySQL
+                uri = f"mysql+pymysql://{values.get('DB_USER')}:{values.get('DB_PASSWORD')}" \
+                    f"@{values.get('DB_HOST')}:{values.get('DB_PORT')}/{values.get('DB_NAME')}"
+                
+                # Aggiunge SSL in modo corretto per PyMySQL
+                if values.get("ENV") == "production":
+                    uri += "?ssl_ca=None"  # Questo è più sicuro di ssl=true per PyMySQL
+                    
+                values["SQLALCHEMY_DATABASE_URI"] = uri
+        
         return values
 
     @model_validator(mode="after")

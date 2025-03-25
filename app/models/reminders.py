@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, T
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
+import datetime
 
 from app.database import Base
 
@@ -34,8 +35,8 @@ class Reminder(Base):
     reminder_date = Column(DateTime(timezone=True), nullable=False)
     
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="reminders")

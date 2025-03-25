@@ -1,4 +1,5 @@
 from typing import List, Annotated
+import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
@@ -221,6 +222,7 @@ async def register_user(
         )
     
     # Create the user
+    now = datetime.datetime.utcnow()
     user = UserModel(
         username=user_in.username,
         email=user_in.email,
@@ -231,6 +233,8 @@ async def register_user(
         phone_number=user_in.phone_number,
         is_active=True,
         is_superuser=False,
+        created_at=now,
+        updated_at=now
     )
     
     try:

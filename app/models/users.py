@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import logging
 import uuid
+import datetime
 
 from app.database import Base
 from app.core.encryption import encryption_service
@@ -25,8 +26,8 @@ class User(Base):
     _phone_number = Column("phone_number", String(20), nullable=True)  # Encrypted
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     # Relationships
     service_accounts = relationship("ServiceAccount", back_populates="user", cascade="all, delete-orphan")

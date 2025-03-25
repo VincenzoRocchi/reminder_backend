@@ -5,6 +5,7 @@ from typing import Optional
 import logging
 import uuid
 import enum
+import datetime
 
 from app.database import Base
 from app.core.encryption import encryption_service
@@ -46,8 +47,8 @@ class ServiceAccount(Base):
     whatsapp_phone_number = Column(String(20), nullable=True)
     
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="service_accounts")

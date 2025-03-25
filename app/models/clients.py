@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+import datetime
 
 from app.database import Base
 
@@ -15,8 +16,8 @@ class Client(Base):
     address = Column(String(500), nullable=True)
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="clients")

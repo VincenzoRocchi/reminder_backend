@@ -6,7 +6,6 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.settings import settings
 from app.api.routes import api_router
-from app.api.endpoints.businesses import router as businesses_router
 from app.database import engine, Base
 
 # Create custom middleware for security headers
@@ -58,9 +57,6 @@ app.add_middleware(
 
 # Mount the main API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
-# Mount the businesses router within the main API
-app.include_router(businesses_router, prefix=f"{settings.API_V1_STR}/businesses")
 
 # Create tables in the database
 Base.metadata.create_all(bind=engine)

@@ -10,6 +10,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# Imposta esplicitamente l'ambiente su testing per le migrazioni
+os.environ["ENV"] = "testing"
+
 # Import all models to ensure they're included in migrations
 from app.models.users import User
 from app.models.serviceAccounts import ServiceAccount, ServiceTypeEnum
