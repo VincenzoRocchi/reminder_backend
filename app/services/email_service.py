@@ -8,7 +8,6 @@ from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
-
 class EmailService:
     """
     Service for sending email notifications
@@ -16,7 +15,7 @@ class EmailService:
     
     @staticmethod
     async def send_email(
-        business,  # Add business parameter
+        service_account,
         recipient_email: str,
         subject: str,
         body: str,
@@ -24,10 +23,10 @@ class EmailService:
         html_content: Optional[str] = None,
     ) -> bool:
         """
-        Send an email to a recipient using business-specific SMTP settings.
+        Send an email to a recipient using service account SMTP settings.
         
         Args:
-            business: Business object with SMTP settings
+            service_account: ServiceAccount object with SMTP settings
             recipient_email: Email address of the recipient
             subject: Subject of the email
             body: Text content of the email
@@ -38,22 +37,22 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         try:
-            # Check if business has SMTP configured
-            if not business.smtp_host or not business.smtp_user or not business.smtp_password:
-                logger.warning(f"Business {business.id} has no SMTP settings configured, falling back to global settings")
-                # Fall back to global settings if business settings not available
+            # Check if service account has SMTP configured
+            if not service_account.smtp_host or not service_account.smtp_user or not service_account.smtp_password:
+                logger.warning(f"Service account {service_account.id} has no SMTP settings configured, falling back to global settings")
+                # Fall back to global settings if service account settings not available
                 smtp_host = settings.SMTP_HOST
                 smtp_port = settings.SMTP_PORT
                 smtp_user = settings.SMTP_USER
                 smtp_password = settings.SMTP_PASSWORD
                 email_from = settings.EMAIL_FROM
             else:
-                # Use business-specific settings
-                smtp_host = business.smtp_host
-                smtp_port = business.smtp_port
-                smtp_user = business.smtp_user
-                smtp_password = business.smtp_password
-                email_from = business.email_from or business.email or settings.EMAIL_FROM
+                # Use service account specific settings
+                smtp_host = service_account.smtp_host
+                smtp_port = service_account.smtp_port
+                smtp_user = service_account.smtp_user
+                smtp_password = service_account.smtp_password
+                email_from = service_account.email_from or settings.EMAIL_FROM
             
             message = MIMEMultipart('alternative')
             message['From'] = email_from
@@ -89,7 +88,8 @@ class EmailService:
     
     @staticmethod
     async def send_reminder_email(
-        business,  # Add business parameter
+        service_account,
+        user,  # Add user parameter to get business name or username
         recipient_email: str,
         reminder_title: str,
         reminder_description: str,
@@ -98,7 +98,8 @@ class EmailService:
         Send a reminder email.
         
         Args:
-            business: Business object with SMTP settings
+            service_account: ServiceAccount object with SMTP settings
+            user: User who owns the service account
             recipient_email: Email address of the recipient
             reminder_title: Title of the reminder
             reminder_description: Description of the reminder
@@ -106,7 +107,10 @@ class EmailService:
         Returns:
             True if email was sent successfully, False otherwise
         """
-        subject = f"Reminder: {reminder_title} from {business.name}"
+        # Use business name if available, otherwise use username
+        sender_name = user.business_name or user.username
+        
+        subject = f"Reminder: {reminder_title} from {sender_name}"
         
         # Create text content
         text_content = f"""
@@ -114,7 +118,7 @@ class EmailService:
         
         {reminder_description}
         
-        This reminder was sent by {business.name}.
+        This reminder was sent by {sender_name}.
         """
         
         # Create HTML content
@@ -124,13 +128,13 @@ class EmailService:
                 <h2>Reminder: {reminder_title}</h2>
                 <p>{reminder_description}</p>
                 <br>
-                <p><em>This reminder was sent by {business.name}.</em></p>
+                <p><em>This reminder was sent by {sender_name}.</em></p>
             </body>
         </html>
         """
         
         return await EmailService.send_email(
-            business=business,
+            service_account=service_account,
             recipient_email=recipient_email,
             subject=subject,
             body=text_content,

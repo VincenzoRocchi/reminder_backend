@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.database import get_db
 from app.core.settings import settings
-from app.models.user import User
+from app.models.users import User
 from app.schemas.token import TokenPayload
 
 from app.core.auth import get_current_user

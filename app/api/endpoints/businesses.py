@@ -32,7 +32,7 @@ from pydantic import ConfigDict
 
 from app.api.dependencies import get_current_user
 from app.database import get_db
-from app.models.user import User as UserModel
+from app.models.users import User as UserModel
 from app.models.business import Business as BusinessModel
 from app.schemas.business import (
     Business,

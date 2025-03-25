@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.core.settings import settings
 from app.core.security import verify_password
-from app.models.user import User
+from app.models.users import User
 from app.database import get_db
 
 # OAuth2 scheme for token authentication

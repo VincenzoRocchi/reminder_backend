@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
 from app.database import Base, get_db
-from app.models.user import User
+from app.models.users import User
 from app.models.business import Business
 from app.core.security import get_password_hash
 from app.core.encryption import encryption_service

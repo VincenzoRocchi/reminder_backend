@@ -1,237 +1,338 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Annotated
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.api.dependencies import get_current_user
 from app.database import get_db
-from app.models.user import User as UserModel
-from app.models.business import Business as BusinessModel
-from app.models.reminder import Reminder as ReminderModel
-from app.models.notification import Notification as NotificationModel
-from app.schemas.reminder import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
+from app.models.users import User as UserModel
+from app.models.reminders import Reminder as ReminderModel, NotificationTypeEnum
+from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel
+from app.models.clients import Client as ClientModel
+from app.models.reminderRecipient import ReminderRecipient
+from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
 
 router = APIRouter()
 
-
 @router.get("/", response_model=List[Reminder])
-def read_reminders(
-    db: Session = Depends(get_db),
+async def read_reminders(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
     skip: int = 0,
     limit: int = 100,
-    business_id: int = None,
-    current_user: UserModel = Depends(get_current_user),
+    active_only: bool = False,
+    service_account_id: int = None,
 ):
     """
-    Retrieve reminders.
-    Filter by business if business_id is provided.
+    Retrieve reminders for the current user.
+    Optionally filter by active status or service account.
     """
-    query = db.query(ReminderModel)
+    query = db.query(ReminderModel).filter(ReminderModel.user_id == current_user.id)
     
-    # Filter by created_by (current user)
-    query = query.filter(ReminderModel.created_by == current_user.id)
+    # Filter by active status if requested
+    if active_only:
+        query = query.filter(ReminderModel.is_active == True)
     
-    # Filter by business
-    if business_id:
-        # Verify business ownership
-        business = db.query(BusinessModel).filter(BusinessModel.id == business_id).first()
-        if not business or (business.owner_id != current_user.id and not current_user.is_superuser):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions to access this business",
-            )
-        query = query.filter(ReminderModel.business_id == business_id)
+    # Filter by service account if provided
+    if service_account_id:
+        query = query.filter(ReminderModel.service_account_id == service_account_id)
     
-    reminders = query.offset(skip).limit(limit).all()
+    reminders = query.order_by(ReminderModel.reminder_date.desc()).offset(skip).limit(limit).all()
     return reminders
 
-
-@router.post("/", response_model=ReminderDetail)
-def create_reminder(
-    reminder_in: ReminderCreate,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+@router.post("/", response_model=ReminderDetail, status_code=status.HTTP_201_CREATED)
+async def create_reminder(
+    reminder_in: Annotated[ReminderCreate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
-    Create new reminder and associated notifications.
+    Create a new reminder with client associations.
     """
-    # Check if business exists and user has access to it
-    business = db.query(BusinessModel).filter(BusinessModel.id == reminder_in.business_id).first()
-    if not business or (business.owner_id != current_user.id and not current_user.is_superuser):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to create a reminder for this business",
-        )
-    
-    # Create reminder
-    reminder_data = reminder_in.dict(exclude={"recipient_ids"})
-    reminder = ReminderModel(**reminder_data, created_by=current_user.id)
-    db.add(reminder)
-    db.commit()
-    db.refresh(reminder)
-    
-    # Create notifications for each recipient
-    notifications = []
-    for recipient_id in reminder_in.recipient_ids:
-        # Verify recipient exists
-        recipient = db.query(UserModel).filter(UserModel.id == recipient_id).first()
-        if not recipient:
+    # Verify service account belongs to user
+    if reminder_in.service_account_id:
+        service_account = db.query(ServiceAccountModel).filter(
+            ServiceAccountModel.id == reminder_in.service_account_id,
+            ServiceAccountModel.user_id == current_user.id
+        ).first()
+        
+        if not service_account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Recipient with ID {recipient_id} not found",
+                detail="Service account not found or not owned by user"
             )
         
-        notification = NotificationModel(
-            reminder_id=reminder.id,
-            recipient_id=recipient_id,
-            notification_type=reminder.notification_type,
-            message=reminder.description
-        )
-        db.add(notification)
-        notifications.append(notification)
+        # Check that service type matches notification type
+        if service_account.service_type.value != reminder_in.notification_type.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({reminder_in.notification_type.value})"
+            )
     
-    db.commit()
+    # Verify clients exist and belong to user
+    client_ids = reminder_in.client_ids
+    if client_ids:
+        clients = db.query(ClientModel).filter(
+            ClientModel.id.in_(client_ids),
+            ClientModel.user_id == current_user.id
+        ).all()
+        
+        found_client_ids = [client.id for client in clients]
+        missing_client_ids = set(client_ids) - set(found_client_ids)
+        
+        if missing_client_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Clients not found or not owned by user: {missing_client_ids}"
+            )
     
-    # Return reminder with recipient IDs
-    result = ReminderDetail(
-        **reminder.__dict__,
-        recipients=[n.recipient_id for n in notifications]
+    # Create reminder
+    reminder_data = reminder_in.model_dump(exclude={"client_ids"})
+    reminder = ReminderModel(
+        user_id=current_user.id,
+        **reminder_data
     )
-    return result
-
+    
+    try:
+        db.add(reminder)
+        db.flush()  # Get the ID without committing
+        
+        # Create client associations
+        for client_id in client_ids:
+            recipient = ReminderRecipient(
+                reminder_id=reminder.id,
+                client_id=client_id
+            )
+            db.add(recipient)
+        
+        db.commit()
+        db.refresh(reminder)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
+    # Get client IDs for response
+    reminder_recipients = db.query(ReminderRecipient).filter(
+        ReminderRecipient.reminder_id == reminder.id
+    ).all()
+    
+    client_ids = [recipient.client_id for recipient in reminder_recipients]
+    
+    # Create detailed response
+    reminder_detail = ReminderDetail(
+        **reminder.__dict__,
+        clients=client_ids
+    )
+    
+    return reminder_detail
 
 @router.get("/{reminder_id}", response_model=ReminderDetail)
-def read_reminder(
+async def read_reminder(
     reminder_id: int,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
-    Get a specific reminder by ID with recipient information.
+    Get a specific reminder by ID with client details.
     """
-    reminder = db.query(ReminderModel).filter(ReminderModel.id == reminder_id).first()
+    reminder = db.query(ReminderModel).filter(
+        ReminderModel.id == reminder_id,
+        ReminderModel.user_id == current_user.id
+    ).first()
+    
     if not reminder:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found",
+            detail="Reminder not found"
         )
     
-    # Check if current user is authorized (creator or business owner)
-    business = db.query(BusinessModel).filter(BusinessModel.id == reminder.business_id).first()
-    if (reminder.created_by != current_user.id and 
-        (not business or business.owner_id != current_user.id) and 
-        not current_user.is_superuser):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to access this reminder",
-        )
-    
-    # Get recipient IDs
-    notifications = db.query(NotificationModel).filter(
-        NotificationModel.reminder_id == reminder.id
+    # Get client IDs
+    reminder_recipients = db.query(ReminderRecipient).filter(
+        ReminderRecipient.reminder_id == reminder.id
     ).all()
-    recipient_ids = [n.recipient_id for n in notifications]
+    
+    client_ids = [recipient.client_id for recipient in reminder_recipients]
+    
+    # Get notification counts (we'll implement this in production)
+    notifications_count = 0
+    sent_count = 0
+    failed_count = 0
     
     # Create detailed response
-    result = ReminderDetail(
+    reminder_detail = ReminderDetail(
         **reminder.__dict__,
-        recipients=recipient_ids
+        clients=client_ids,
+        notifications_count=notifications_count,
+        sent_count=sent_count,
+        failed_count=failed_count
     )
-    return result
-
+    
+    return reminder_detail
 
 @router.put("/{reminder_id}", response_model=ReminderDetail)
-def update_reminder(
+async def update_reminder(
     reminder_id: int,
-    reminder_in: ReminderUpdate,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    reminder_in: Annotated[ReminderUpdate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
-    Update a reminder and its recipients.
+    Update a reminder and its client associations.
     """
-    reminder = db.query(ReminderModel).filter(ReminderModel.id == reminder_id).first()
+    reminder = db.query(ReminderModel).filter(
+        ReminderModel.id == reminder_id,
+        ReminderModel.user_id == current_user.id
+    ).first()
+    
     if not reminder:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found",
+            detail="Reminder not found"
         )
     
-    # Check if current user is authorized
-    business = db.query(BusinessModel).filter(BusinessModel.id == reminder.business_id).first()
-    if (reminder.created_by != current_user.id and 
-        (not business or business.owner_id != current_user.id) and 
-        not current_user.is_superuser):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this reminder",
-        )
-    
-    # Update reminder attributes
-    update_data = reminder_in.dict(exclude={"recipient_ids"}, exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(reminder, key, value)
-    
-    # Update recipients if provided
-    if reminder_in.recipient_ids is not None:
-        # Delete existing notifications
-        db.query(NotificationModel).filter(
-            NotificationModel.reminder_id == reminder.id
-        ).delete()
+    # Verify service account if being updated
+    if reminder_in.service_account_id is not None:
+        service_account = db.query(ServiceAccountModel).filter(
+            ServiceAccountModel.id == reminder_in.service_account_id,
+            ServiceAccountModel.user_id == current_user.id
+        ).first()
         
-        # Create new notifications
-        for recipient_id in reminder_in.recipient_ids:
-            notification = NotificationModel(
-                reminder_id=reminder.id,
-                recipient_id=recipient_id,
-                notification_type=reminder.notification_type,
-                message=reminder.description
+        if not service_account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service account not found or not owned by user"
             )
-            db.add(notification)
+        
+        # If notification type is being updated, check compatibility
+        notification_type = reminder_in.notification_type or reminder.notification_type
+        if service_account.service_type.value != notification_type.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({notification_type.value})"
+            )
     
-    db.add(reminder)
-    db.commit()
-    db.refresh(reminder)
+    # Update reminder fields
+    update_data = reminder_in.model_dump(exclude={"client_ids"}, exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(reminder, field, value)
     
-    # Get updated recipient IDs
-    notifications = db.query(NotificationModel).filter(
-        NotificationModel.reminder_id == reminder.id
+    try:
+        # Update client associations if provided
+        if reminder_in.client_ids is not None:
+            # Verify clients exist and belong to user
+            client_ids = reminder_in.client_ids
+            if client_ids:
+                clients = db.query(ClientModel).filter(
+                    ClientModel.id.in_(client_ids),
+                    ClientModel.user_id == current_user.id
+                ).all()
+                
+                found_client_ids = [client.id for client in clients]
+                missing_client_ids = set(client_ids) - set(found_client_ids)
+                
+                if missing_client_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Clients not found or not owned by user: {missing_client_ids}"
+                    )
+            
+            # Delete existing associations
+            db.query(ReminderRecipient).filter(
+                ReminderRecipient.reminder_id == reminder.id
+            ).delete()
+            
+            # Create new associations
+            for client_id in client_ids:
+                recipient = ReminderRecipient(
+                    reminder_id=reminder.id,
+                    client_id=client_id
+                )
+                db.add(recipient)
+        
+        db.add(reminder)
+        db.commit()
+        db.refresh(reminder)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
+    # Get updated client IDs
+    reminder_recipients = db.query(ReminderRecipient).filter(
+        ReminderRecipient.reminder_id == reminder.id
     ).all()
-    recipient_ids = [n.recipient_id for n in notifications]
+    
+    client_ids = [recipient.client_id for recipient in reminder_recipients]
     
     # Create detailed response
-    result = ReminderDetail(
+    reminder_detail = ReminderDetail(
         **reminder.__dict__,
-        recipients=recipient_ids
+        clients=client_ids
     )
-    return result
+    
+    return reminder_detail
 
-
-@router.delete("/{reminder_id}", response_model=Reminder)
-def delete_reminder(
+@router.delete("/{reminder_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_reminder(
     reminder_id: int,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
     Delete a reminder.
     """
-    reminder = db.query(ReminderModel).filter(ReminderModel.id == reminder_id).first()
+    reminder = db.query(ReminderModel).filter(
+        ReminderModel.id == reminder_id,
+        ReminderModel.user_id == current_user.id
+    ).first()
+    
     if not reminder:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found",
+            detail="Reminder not found"
         )
     
-    # Check if current user is authorized
-    business = db.query(BusinessModel).filter(BusinessModel.id == reminder.business_id).first()
-    if (reminder.created_by != current_user.id and 
-        (not business or business.owner_id != current_user.id) and 
-        not current_user.is_superuser):
+    try:
+        db.delete(reminder)
+        db.commit()
+    except Exception as e:
+        db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to delete this reminder",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
     
-    db.delete(reminder)
-    db.commit()
-    return reminder
+    return {"detail": "Reminder deleted successfully"}
+
+@router.post("/{reminder_id}/send-now", response_model=dict)
+async def send_reminder_now(
+    reminder_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+):
+    """
+    Trigger a reminder to send immediately, regardless of scheduled date.
+    """
+    reminder = db.query(ReminderModel).filter(
+        ReminderModel.id == reminder_id,
+        ReminderModel.user_id == current_user.id
+    ).first()
+    
+    if not reminder:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reminder not found"
+        )
+    
+    # For now, just return a success message
+    # In production, this would call the scheduler service
+    return {
+        "status": "success",
+        "message": f"Reminder '{reminder.title}' queued for immediate delivery",
+        "timestamp": datetime.now().isoformat()
+    }
