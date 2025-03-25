@@ -15,8 +15,8 @@ class ProductionSettings(BaseAppSettings):
     def validate_secret_key(cls, v):
         if len(v) < 32:
             raise ValueError("Production SECRET_KEY must be at least 32 characters")
-        if v == "your-secret-key-here" or v == "dev-secret-key-for-local-testing-only":
-            raise ValueError("Production SECRET_KEY must not use development defaults")
+        if v == "your-secret-key-here" or v == "test-secret-key-for-testing-only" or v == "development-secret-key-for-development-only":
+            raise ValueError("Production SECRET_KEY must not use any default values")
         return v
     
     # Add extra validators for production (db host)
