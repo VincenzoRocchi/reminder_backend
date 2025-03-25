@@ -1,4 +1,6 @@
 # app/core/settings/development.py
+import os
+import secrets
 from .base import BaseAppSettings
 from pydantic import field_validator
 import re
@@ -6,7 +8,24 @@ import re
 class DevelopmentSettings(BaseAppSettings):
     # Critical development overrides
     STRICT_VALIDATION: bool = False
-    SECRET_KEY: str = "dev-secret-key-for-local-testing-only"
+    
+    # Get SECRET_KEY from environment or generate a random one
+    # that persists for the lifetime of the application
+    _dev_secret_key: str = None
+    
+    @property
+    def SECRET_KEY(self) -> str:
+        # Use the environment variable if set
+        env_key = os.getenv("DEV_SECRET_KEY")
+        if env_key:
+            return env_key
+            
+        # Otherwise use a generated key that persists for the app's lifetime
+        if DevelopmentSettings._dev_secret_key is None:
+            DevelopmentSettings._dev_secret_key = secrets.token_urlsafe(32)
+            print("WARNING: Using a generated SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
+        
+        return DevelopmentSettings._dev_secret_key
     
     # Validate that we're using a real database in development
     @field_validator('SQLALCHEMY_DATABASE_URI')

@@ -12,3 +12,4 @@ api_router.include_router(service_accounts.router, prefix="/service-accounts", t
 api_router.include_router(clients.router, prefix="/clients", tags=["clients"])
 api_router.include_router(reminders.router, prefix="/reminders", tags=["reminders"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
