@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.core.settings import settings
-from app.core.security import verify_password
+from app.core.security import verify_password, get_signing_key
 from app.models.users import User
 from app.database import get_db
 
@@ -35,7 +35,7 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, get_signing_key(), algorithms=[settings.ALGORITHM]
         )
         user_id: str = payload.get("sub")
         if user_id is None:

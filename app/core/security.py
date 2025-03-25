@@ -10,6 +10,15 @@ import uuid
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def get_signing_key():
+    """
+    Get the appropriate signing key based on environment
+    """
+    if settings.IS_DEVELOPMENT and hasattr(settings, 'DEV_SECRET_KEY'):
+        return settings.DEV_SECRET_KEY
+    return settings.SECRET_KEY
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
     Create a JWT access token with expiration time.
@@ -29,8 +38,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     # Genera il JWT senza restituire il jti separatamente
     jti = str(uuid.uuid4())
     to_encode.update({"exp": expire, "jti": jti, "token_type": "access"})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, get_signing_key(), algorithm=settings.ALGORITHM)
     return encoded_jwt
+
 
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
@@ -51,7 +61,7 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
             days=settings.REFRESH_TOKEN_EXPIRE_DAYS
         )
     to_encode.update({"exp": expire, "token_type": "refresh"})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, get_signing_key(), algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 

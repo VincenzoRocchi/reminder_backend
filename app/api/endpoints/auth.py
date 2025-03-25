@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 from app.core.rate_limiter import rate_limit_login
 from app.api.dependencies import get_current_user, oauth2_scheme
 from app.core.auth import authenticate_user
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_access_token, create_refresh_token, get_signing_key
 from app.core.settings import settings
 from app.core.exceptions import TokenExpiredError, TokenInvalidError
 from app.core.token_blacklist import token_blacklist
@@ -54,7 +54,7 @@ def logout(
     """
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, get_signing_key(), algorithms=[settings.ALGORITHM]
         )
         jti = payload.get("jti")
         exp = payload.get("exp")
