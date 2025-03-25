@@ -1,5 +1,6 @@
 # app/core/settings/testing.py
 from .base import BaseAppSettings
+from pydantic import field_validator
 
 class TestingSettings(BaseAppSettings):
     # Validate that we're using a test database congiured in .env.testing

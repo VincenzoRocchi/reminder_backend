@@ -123,9 +123,11 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     # SICUREZZA COOKIE
     # ------------------------------
-    @property
-    def SECURE_COOKIES(self) -> bool:
-        return os.getenv("SECURE_COOKIES", "False" if self.IS_DEVELOPMENT else "True").lower() == "true"
+    # Replace the property with a field definition
+    SECURE_COOKIES: bool = Field(
+        default_factory=lambda: os.getenv("SECURE_COOKIES", "False" if ENV == "development" else "True").lower() == "true",
+        description="Abilita flag 'secure' sui cookie (True in produzione, False in sviluppo)"
+    )
     
     # ------------------------------
     # CONFIGURAZIONE STORAGE AWS S3
