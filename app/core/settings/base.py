@@ -88,16 +88,18 @@ class BaseAppSettings(BaseSettings):
     @property
     def IS_PRODUCTION(self) -> bool:
         return self.ENV == "production"
+    @property
+    def IS_TESTING(self) -> bool:
+        return self.ENV == "testing"
     
     STRICT_VALIDATION: bool = Field(
-        default=os.getenv("STRICT_VALIDATION", "True" if not ENV == "development" else "False").lower() == "true",
+        default=os.getenv("STRICT_VALIDATION", "True" if ENV != "development" else "False").lower() == "true",
         description="Enforce strict validation of sensitive data"
     )
     def should_validate(self, validation_type: str = "all") -> bool:
         if self.IS_PRODUCTION:
             return True
         return self.STRICT_VALIDATION
-    
     # ------------------------------
     # IMPOSTAZIONI LOGGING
     # ------------------------------
@@ -171,12 +173,29 @@ class BaseAppSettings(BaseSettings):
 
     @model_validator(mode="before")
     def build_sqlalchemy_uri(cls, values: dict) -> dict:
-        if not values.get("SQLALCHEMY_DATABASE_URI"):
-            uri = f"mysql+pymysql://{values.get('DB_USER')}:{values.get('DB_PASSWORD')}" \
-                  f"@{values.get('DB_HOST')}:{values.get('DB_PORT')}/{values.get('DB_NAME')}"
-            if values.get("ENV") != "development":
+        # If URI is already specified in the environment, use that
+        if values.get("SQLALCHEMY_DATABASE_URI"):
+            return values
+            
+        # Only build a URI if we have all the required components
+        db_host = values.get('DB_HOST')
+        db_user = values.get('DB_USER')
+        db_password = values.get('DB_PASSWORD')
+        db_name = values.get('DB_NAME')
+        db_port = values.get('DB_PORT')
+        
+        if all([db_host, db_user, db_password, db_name, db_port]):
+            # Build the URI - we'll let the environment-specific settings
+            # decide whether to use it or enforce their own rules
+            uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            
+            # Add SSL for non-development environments
+            env = values.get('ENV', '').lower()
+            if env != "development":
                 uri += "?ssl=true"
+                
             values["SQLALCHEMY_DATABASE_URI"] = uri
+            
         return values
 
     @model_validator(mode="after")

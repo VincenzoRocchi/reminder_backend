@@ -1,7 +1,8 @@
 # app/core/settings/testing.py
 from .base import BaseAppSettings
+from typing import Optional
 
 class TestingSettings(BaseAppSettings):
-    # Per i test potresti voler forzare l'uso di un database SQLite in memoria
-    SQLALCHEMY_DATABASE_URI: str = "sqlite:///:memory:"
-    # Eventuali altre override per semplificare i test possono essere aggiunte qui
+    # Default to SQLite file database for testing
+    SQLALCHEMY_DATABASE_URI: str = "sqlite:///./test.db"
+    #overrides the default value of the TESTING environemnt variable
