@@ -33,8 +33,8 @@ class ProductionSettings(BaseAppSettings):
             raise ValueError("Production must use a proper database, not SQLite")
         return v
         
-    def model_post_init(self, **kwargs):
-        super().model_post_init(**kwargs)
+    def model_post_init_handler(self, **kwargs):
+        # No need to call super() if BaseAppSettings doesn't implement this method
         
         # Final validation of production settings
         if not self.SQLALCHEMY_DATABASE_URI:

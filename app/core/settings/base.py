@@ -156,11 +156,9 @@ class BaseAppSettings(BaseSettings):
     # CONFIGURAZIONE PYDANTIC
     # ------------------------------
     model_config = ConfigDict(
-        env_file=env_file,
+        env_file=env_file if Path(env_file).exists() else ".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
-        validate_assignment=True,
-        extra="forbid"  # Vieta parametri extra non mappati
+        extra="ignore"
     )
     
     # ------------------------------

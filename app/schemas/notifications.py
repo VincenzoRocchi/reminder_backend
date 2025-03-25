@@ -28,8 +28,7 @@ class NotificationInDBBase(NotificationBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Notification(NotificationInDBBase):
     """Complete notification model returned from API"""

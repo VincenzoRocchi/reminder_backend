@@ -54,8 +54,7 @@ class ReminderInDBBase(ReminderBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Reminder(ReminderInDBBase):
     """Complete reminder model returned from API"""
