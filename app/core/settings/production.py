@@ -3,15 +3,14 @@ from .base import BaseAppSettings
 from pydantic import field_validator
 
 class ProductionSettings(BaseAppSettings):
-    # These must be provided in production and not use defaults
-    SECRET_KEY: str 
-    DB_HOST: str
+    # add extra validators for production (cookies)
+    @field_validator('SECURE_COOKIES')
+    def validate_secure_cookies(cls, v):
+        if not v:
+            raise ValueError("SECURE_COOKIES must be True in production")
+        return v
     
-    # Force these values in production regardless of .env
-    STRICT_VALIDATION: bool = True
-    SECURE_COOKIES: bool = True
-    
-    # Add extra validators for production
+    # Add extra validators for production (secret key)
     @field_validator('SECRET_KEY')
     def validate_secret_key(cls, v):
         if len(v) < 32:
@@ -19,13 +18,15 @@ class ProductionSettings(BaseAppSettings):
         if v == "your-secret-key-here" or v == "dev-secret-key-for-local-testing-only":
             raise ValueError("Production SECRET_KEY must not use development defaults")
         return v
-        
+    
+    # Add extra validators for production (db host)
     @field_validator('DB_HOST')
     def validate_db_host(cls, v):
         if v == "localhost" or v == "127.0.0.1":
             raise ValueError("Production DB_HOST must not be localhost")
         return v
-        
+    
+    # Add extra validators for production (db uri)
     @field_validator('SQLALCHEMY_DATABASE_URI')
     def validate_db_uri(cls, v):
         if v and 'sqlite' in v.lower():

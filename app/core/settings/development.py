@@ -6,9 +6,6 @@ from pydantic import field_validator
 import re
 
 class DevelopmentSettings(BaseAppSettings):
-    # Critical development overrides
-    STRICT_VALIDATION: bool = False
-    
     # Get SECRET_KEY from environment or generate a random one
     # that persists for the lifetime of the application
     _dev_secret_key: str = None
@@ -26,6 +23,27 @@ class DevelopmentSettings(BaseAppSettings):
             print("WARNING: Using a generated SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
         
         return DevelopmentSettings._dev_secret_key
+    
+    @field_validator('STRICT_VALIDATION')
+    def validate_strict_validation(cls, v):
+        if v is True:
+            raise ValueError(
+                "STRICT_VALIDATION must be False in development environment. "
+                "If you need strict validation, use the testing environment instead "
+                "by setting ENV=testing."
+            )
+        return v
+    
+    # Validate that we're using DEBUG or INFO log level in development
+    @field_validator('LOG_LEVEL')
+    def validate_log_level(cls, v):
+        if v.upper() not in ["DEBUG", "INFO"]:
+            raise ValueError(
+                "LOG_LEVEL should be set to DEBUG or INFO in development environment. "
+                "For a better development experience, DEBUG is recommended. "
+                "For other log levels, use the testing environment by setting ENV=testing."
+            )
+        return v
     
     # Validate that we're using a real database in development
     @field_validator('SQLALCHEMY_DATABASE_URI')
