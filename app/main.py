@@ -3,10 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+import logging
 
 from app.core.settings import settings
 from app.api.routes import api_router
 from app.database import engine, Base
+from app.services.scheduler_service import scheduler_service
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Create custom middleware for security headers
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -29,6 +34,21 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+# Register startup event to start the scheduler
+@app.on_event("startup")
+async def startup_event():
+    """Start scheduler when application starts"""
+    scheduler_service.start()
+    logger.info("Scheduler service started")
+
+# Register shutdown event to gracefully stop the scheduler
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown scheduler gracefully when application stops"""
+    if hasattr(scheduler_service.scheduler, 'shutdown'):
+        scheduler_service.scheduler.shutdown()
+        logger.info("Scheduler service shut down")
 
 # Add production-only security middleware
 if settings.ENV == "production":
