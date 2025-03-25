@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import users, service_accounts, clients, reminders, notifications, auth
+from app.api.endpoints import users, service_accounts, clients, reminders, notifications, auth, customers
 
 # Main API router
 api_router = APIRouter()
