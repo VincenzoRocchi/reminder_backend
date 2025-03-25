@@ -301,6 +301,7 @@ To enable relaxed validation in development:
 # In your .env.development file
 STRICT_VALIDATION=False
 ```
+
 ## License
 
 [MIT](LICENSE)
