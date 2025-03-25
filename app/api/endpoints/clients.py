@@ -1,5 +1,5 @@
 from typing import List, Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -9,6 +9,7 @@ from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient
 from app.models.reminders import Reminder
 from app.schemas.clients import Client, ClientCreate, ClientUpdate, ClientDetail
+from app.core.exceptions import AppException
 
 router = APIRouter()
 
@@ -57,9 +58,10 @@ async def create_client(
         db.refresh(client)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return client
@@ -78,9 +80,10 @@ async def read_client(
         .first()
     
     if not client:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client not found"
+        raise AppException(
+            message="Client not found",
+            code="CLIENT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # Count reminders and notifications for this client
@@ -129,9 +132,10 @@ async def update_client(
         .first()
     
     if not client:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client not found"
+        raise AppException(
+            message="Client not found",
+            code="CLIENT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     update_data = client_in.model_dump(exclude_unset=True)
@@ -144,14 +148,15 @@ async def update_client(
         db.refresh(client)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return client
 
-@router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{client_id}")
 async def delete_client(
     client_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -165,9 +170,10 @@ async def delete_client(
         .first()
     
     if not client:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client not found"
+        raise AppException(
+            message="Client not found",
+            code="CLIENT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     try:
@@ -175,9 +181,10 @@ async def delete_client(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return {"detail": "Client deleted successfully"}
@@ -215,9 +222,10 @@ async def bulk_import_clients(
             db.commit()
         except Exception as e:
             db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error during commit: {str(e)}"
+            raise AppException(
+                message=f"Error during commit: {str(e)}",
+                code="DATABASE_ERROR",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     return {

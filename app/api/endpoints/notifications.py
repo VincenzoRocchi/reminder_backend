@@ -1,5 +1,5 @@
 from typing import List, Annotated
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -8,6 +8,7 @@ from app.models.users import User as UserModel
 from app.models.reminders import Reminder as ReminderModel
 from app.models.notifications import Notification as NotificationModel, NotificationStatusEnum
 from app.schemas.notifications import Notification, NotificationUpdate, NotificationDetail
+from app.core.exceptions import AppException
 
 router = APIRouter()
 
@@ -45,9 +46,10 @@ async def read_notifications(
             status_enum = NotificationStatusEnum(status)
             query = query.filter(NotificationModel.status == status_enum)
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status value: {status}"
+            raise AppException(
+                message=f"Invalid status value: {status}",
+                code="INVALID_STATUS",
+                status_code=status.HTTP_400_BAD_REQUEST
             )
     
     # Order by most recent first
@@ -67,37 +69,20 @@ async def read_notification(
     """
     Get a specific notification by ID.
     """
-    # Join with reminder to check ownership
-    notification = db.query(NotificationModel).join(
-        ReminderModel,
-        NotificationModel.reminder_id == ReminderModel.id
-    ).filter(
-        NotificationModel.id == notification_id,
+    notification = db.query(NotificationModel).filter(
+        NotificationModel.id == notification_id
+    ).join(ReminderModel).filter(
         ReminderModel.user_id == current_user.id
     ).first()
     
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
+        raise AppException(
+            message="Notification not found",
+            code="NOTIFICATION_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Get reminder details
-    reminder = db.query(ReminderModel).filter(
-        ReminderModel.id == notification.reminder_id
-    ).first()
-    
-    # Get client details (we'll need to import the Client model)
-    client_name = "Unknown"  # In production, get this from the client
-    
-    # Create detailed response
-    notification_detail = NotificationDetail(
-        **notification.__dict__,
-        reminder_title=reminder.title,
-        client_name=client_name
-    )
-    
-    return notification_detail
+    return notification
 
 @router.put("/{notification_id}", response_model=Notification)
 async def update_notification(
@@ -119,9 +104,10 @@ async def update_notification(
     ).first()
     
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
+        raise AppException(
+            message="Notification not found",
+            code="NOTIFICATION_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # Update fields
@@ -132,9 +118,10 @@ async def update_notification(
         try:
             update_data["status"] = NotificationStatusEnum(update_data["status"])
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status value: {update_data['status']}"
+            raise AppException(
+                message=f"Invalid status value: {update_data['status']}",
+                code="INVALID_STATUS",
+                status_code=status.HTTP_400_BAD_REQUEST
             )
     
     for field, value in update_data.items():
@@ -146,9 +133,10 @@ async def update_notification(
         db.refresh(notification)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return notification
@@ -172,16 +160,18 @@ async def resend_notification(
     ).first()
     
     if not notification:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
+        raise AppException(
+            message="Notification not found",
+            code="NOTIFICATION_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # Only allow resending failed notifications
     if notification.status != NotificationStatusEnum.FAILED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Can only resend failed notifications. Current status: {notification.status.value}"
+        raise AppException(
+            message=f"Can only resend failed notifications. Current status: {notification.status.value}",
+            code="INVALID_NOTIFICATION_STATUS",
+            status_code=status.HTTP_400_BAD_REQUEST
         )
     
     # Reset status to pending
@@ -194,9 +184,10 @@ async def resend_notification(
         db.refresh(notification)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     # In production, this would trigger the scheduler to pick up the notification

@@ -1,5 +1,5 @@
 from typing import List, Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -11,6 +11,7 @@ from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel
 from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient
 from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
+from app.core.exceptions import AppException
 
 router = APIRouter()
 
@@ -57,16 +58,18 @@ async def create_reminder(
         ).first()
         
         if not service_account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Service account not found or not owned by user"
+            raise AppException(
+                message="Service account not found or not owned by user",
+                code="SERVICE_ACCOUNT_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
             )
         
         # Check that service type matches notification type
         if service_account.service_type.value != reminder_in.notification_type.value:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({reminder_in.notification_type.value})"
+            raise AppException(
+                message=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({reminder_in.notification_type.value})",
+                code="SERVICE_TYPE_MISMATCH",
+                status_code=status.HTTP_400_BAD_REQUEST
             )
     
     # Verify clients exist and belong to user
@@ -81,9 +84,10 @@ async def create_reminder(
         missing_client_ids = set(client_ids) - set(found_client_ids)
         
         if missing_client_ids:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Clients not found or not owned by user: {missing_client_ids}"
+            raise AppException(
+                message=f"Clients not found or not owned by user: {missing_client_ids}",
+                code="CLIENT_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
             )
     
     # Create reminder
@@ -109,9 +113,10 @@ async def create_reminder(
         db.refresh(reminder)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     # Get client IDs for response
@@ -144,9 +149,10 @@ async def read_reminder(
     ).first()
     
     if not reminder:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found"
+        raise AppException(
+            message="Reminder not found",
+            code="REMINDER_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # Get client IDs
@@ -188,9 +194,10 @@ async def update_reminder(
     ).first()
     
     if not reminder:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found"
+        raise AppException(
+            message="Reminder not found",
+            code="REMINDER_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # Verify service account if being updated
@@ -201,17 +208,19 @@ async def update_reminder(
         ).first()
         
         if not service_account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Service account not found or not owned by user"
+            raise AppException(
+                message="Service account not found or not owned by user",
+                code="SERVICE_ACCOUNT_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
             )
         
         # If notification type is being updated, check compatibility
         notification_type = reminder_in.notification_type or reminder.notification_type
         if service_account.service_type.value != notification_type.value:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({notification_type.value})"
+            raise AppException(
+                message=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({notification_type.value})",
+                code="SERVICE_TYPE_MISMATCH",
+                status_code=status.HTTP_400_BAD_REQUEST
             )
     
     # Update reminder fields
@@ -234,9 +243,10 @@ async def update_reminder(
                 missing_client_ids = set(client_ids) - set(found_client_ids)
                 
                 if missing_client_ids:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Clients not found or not owned by user: {missing_client_ids}"
+                    raise AppException(
+                        message=f"Clients not found or not owned by user: {missing_client_ids}",
+                        code="CLIENT_NOT_FOUND",
+                        status_code=status.HTTP_404_NOT_FOUND
                     )
             
             # Delete existing associations
@@ -257,9 +267,10 @@ async def update_reminder(
         db.refresh(reminder)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     # Get updated client IDs
@@ -277,7 +288,7 @@ async def update_reminder(
     
     return reminder_detail
 
-@router.delete("/{reminder_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{reminder_id}")
 async def delete_reminder(
     reminder_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -292,9 +303,10 @@ async def delete_reminder(
     ).first()
     
     if not reminder:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found"
+        raise AppException(
+            message="Reminder not found",
+            code="REMINDER_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     try:
@@ -302,9 +314,10 @@ async def delete_reminder(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return {"detail": "Reminder deleted successfully"}
@@ -324,9 +337,10 @@ async def send_reminder_now(
     ).first()
     
     if not reminder:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reminder not found"
+        raise AppException(
+            message="Reminder not found",
+            code="REMINDER_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # For now, just return a success message

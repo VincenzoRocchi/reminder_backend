@@ -1,5 +1,5 @@
 from typing import List, Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.users import User as UserModel
 from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel, ServiceTypeEnum
 from app.schemas.serviceAccounts import ServiceAccount, ServiceAccountCreate, ServiceAccountUpdate, ServiceType
+from app.core.exceptions import AppException, InsufficientPermissionsError
 
 router = APIRouter()
 
@@ -43,15 +44,17 @@ async def create_service_account(
     # Additional validation based on service type
     if service_account_in.service_type == ServiceType.EMAIL:
         if service_account_in.smtp_password and not (service_account_in.smtp_host and service_account_in.smtp_port):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="SMTP configuration requires host and port"
+            raise AppException(
+                message="SMTP configuration requires host and port",
+                code="INVALID_CONFIGURATION",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
             )
     elif service_account_in.service_type == ServiceType.SMS:
         if service_account_in.twilio_auth_token and not service_account_in.twilio_account_sid:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Twilio configuration requires account SID"
+            raise AppException(
+                message="Twilio configuration requires account SID",
+                code="INVALID_CONFIGURATION",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
             )
     
     # Convert Pydantic enum to SQLAlchemy enum
@@ -72,9 +75,10 @@ async def create_service_account(
         db.refresh(service_account)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return service_account
@@ -88,20 +92,16 @@ async def read_service_account(
     """
     Get a specific service account by ID.
     """
-    service_account = db.query(ServiceAccountModel)\
-        .filter(ServiceAccountModel.id == service_account_id)\
-        .first()
+    service_account = db.query(ServiceAccountModel).filter(
+        ServiceAccountModel.id == service_account_id,
+        ServiceAccountModel.user_id == current_user.id
+    ).first()
     
     if not service_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Service account not found"
-        )
-    
-    if service_account.user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+        raise AppException(
+            message="Service account not found",
+            code="SERVICE_ACCOUNT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     return service_account
@@ -121,25 +121,24 @@ async def update_service_account(
         .first()
     
     if not service_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Service account not found"
+        raise AppException(
+            message="Service account not found",
+            code="SERVICE_ACCOUNT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     if service_account.user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+        raise InsufficientPermissionsError(required_permission="owner or superuser")
     
     # Update fields
     update_data = service_account_in.model_dump(exclude_unset=True)
     
     # Additional validation
     if 'smtp_password' in update_data and not (service_account.smtp_host or update_data.get('smtp_host')):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="SMTP configuration requires host"
+        raise AppException(
+            message="SMTP configuration requires host",
+            code="INVALID_CONFIGURATION",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
         )
     
     for field, value in update_data.items():
@@ -151,14 +150,15 @@ async def update_service_account(
         db.refresh(service_account)
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return service_account
 
-@router.delete("/{service_account_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{service_account_id}")
 async def delete_service_account(
     service_account_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -172,25 +172,24 @@ async def delete_service_account(
         .first()
     
     if not service_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Service account not found"
+        raise AppException(
+            message="Service account not found",
+            code="SERVICE_ACCOUNT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     if service_account.user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+        raise InsufficientPermissionsError(required_permission="owner or superuser")
     
     try:
         db.delete(service_account)
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        raise AppException(
+            message=f"Database error: {str(e)}",
+            code="DATABASE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
     return {"detail": "Service account deleted successfully"}
@@ -209,16 +208,14 @@ async def test_service_account(
         .first()
     
     if not service_account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Service account not found"
+        raise AppException(
+            message="Service account not found",
+            code="SERVICE_ACCOUNT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     if service_account.user_id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+        raise InsufficientPermissionsError(required_permission="owner or superuser")
     
     # Test logic would depend on the service type
     # For now, just return a success message
