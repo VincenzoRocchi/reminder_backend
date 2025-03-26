@@ -52,7 +52,6 @@ Alcuni endpoint restituiscono direttamente il modello, mentre altri lo incapsula
 
 ---
 
-
 ### Testing
 
 #### Mancanza di Infrastruttura di Testing

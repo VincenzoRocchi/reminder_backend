@@ -1,9 +1,11 @@
 # app/core/settings/testing.py
-from .base import BaseAppSettings
+from app.core.settings.base import BaseAppSettings
 from pydantic import field_validator
 
 class TestingSettings(BaseAppSettings):
-    # Validate that we're using a test database congiured in .env.testing
+    """Settings for the testing environment."""
+    
+    # Validate that we're using a test database configured in .env.testing
     @field_validator('SQLALCHEMY_DATABASE_URI')
     def validate_db_uri(cls, v):
         if not v:
@@ -23,6 +25,3 @@ class TestingSettings(BaseAppSettings):
                 "by setting ENV=development."
             )
         return v
-
-# Redis is not required for tests
-USE_REDIS: bool = False
