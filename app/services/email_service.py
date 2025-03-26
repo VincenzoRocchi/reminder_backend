@@ -17,7 +17,7 @@ class EmailService:
     
     @staticmethod
     async def send_email(
-        service_account,
+        email_configuration,
         recipient_email: str,
         subject: str,
         body: str,
@@ -25,10 +25,10 @@ class EmailService:
         html_content: Optional[str] = None,
     ) -> bool:
         """
-        Send an email to a recipient using service account SMTP settings.
+        Send an email to a recipient using email configuration SMTP settings.
         
         Args:
-            service_account: ServiceAccount object with SMTP settings
+            email_configuration: EmailConfiguration object with SMTP settings
             recipient_email: Email address of the recipient
             subject: Subject of the email
             body: Text content of the email
@@ -39,36 +39,17 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         try:
-            # Import secrets manager here to avoid circular imports
-            from app.core.secrets_manager import secrets_manager
+            # Check if email configuration is complete
+            if not email_configuration.smtp_host or not email_configuration.smtp_user or not email_configuration.smtp_password:
+                logger.error(f"Email configuration {email_configuration.id} has incomplete SMTP settings")
+                return False
             
-            # Check if service account has SMTP configured
-            if not service_account.smtp_host or not service_account.smtp_user or not service_account.smtp_password:
-                logger.warning(f"Service account {service_account.id} has incomplete SMTP settings, checking secrets")
-                
-                # Try to get from secrets first
-                try:
-                    email_secrets = secrets_manager.get_category("email")
-                    smtp_host = service_account.smtp_host or email_secrets.get("smtp_host") or settings.SMTP_HOST
-                    smtp_port = service_account.smtp_port or email_secrets.get("smtp_port", 0) or settings.SMTP_PORT
-                    smtp_user = service_account.smtp_user or email_secrets.get("smtp_user") or settings.SMTP_USER
-                    smtp_password = service_account.smtp_password or email_secrets.get("smtp_password") or settings.SMTP_PASSWORD
-                    email_from = service_account.email_from or email_secrets.get("email_from") or settings.EMAIL_FROM
-                except Exception as e:
-                    # Fall back to settings if secrets fail
-                    logger.warning(f"Error accessing email secrets: {str(e)}")
-                    smtp_host = service_account.smtp_host or settings.SMTP_HOST
-                    smtp_port = service_account.smtp_port or settings.SMTP_PORT
-                    smtp_user = service_account.smtp_user or settings.SMTP_USER
-                    smtp_password = service_account.smtp_password or settings.SMTP_PASSWORD
-                    email_from = service_account.email_from or settings.EMAIL_FROM
-            else:
-                # Use service account specific settings
-                smtp_host = service_account.smtp_host
-                smtp_port = service_account.smtp_port
-                smtp_user = service_account.smtp_user
-                smtp_password = service_account.smtp_password
-                email_from = service_account.email_from or settings.EMAIL_FROM
+            # Use email configuration settings
+            smtp_host = email_configuration.smtp_host
+            smtp_port = email_configuration.smtp_port
+            smtp_user = email_configuration.smtp_user
+            smtp_password = email_configuration.smtp_password
+            email_from = email_configuration.email_from
             
             message = MIMEMultipart('alternative')
             message['From'] = email_from
@@ -89,7 +70,7 @@ class EmailService:
             await aiosmtplib.send(
                 message,
                 hostname=smtp_host,
-                port=smtp_port or 587,
+                port=smtp_port,
                 username=smtp_user,
                 password=smtp_password,
                 use_tls=True,
@@ -104,27 +85,31 @@ class EmailService:
     
     @staticmethod
     async def send_reminder_email(
-        service_account,
-        user,  # Add user parameter to get business name or username
+        email_configuration,
+        user,
         recipient_email: str,
         reminder_title: str,
         reminder_description: str,
+        sender_identity=None,
     ) -> bool:
         """
         Send a reminder email.
         
         Args:
-            service_account: ServiceAccount object with SMTP settings
-            user: User who owns the service account
+            email_configuration: EmailConfiguration object with SMTP settings
+            user: User who owns the email configuration
             recipient_email: Email address of the recipient
             reminder_title: Title of the reminder
             reminder_description: Description of the reminder
+            sender_identity: Optional SenderIdentity object for customizing from name
             
         Returns:
             True if email was sent successfully, False otherwise
         """
-        # Use business name if available, otherwise use username
+        # Use sender identity display name if available, otherwise use business name or username
         sender_name = user.business_name or user.username
+        if sender_identity and sender_identity.identity_type == "EMAIL":
+            sender_name = sender_identity.display_name
         
         subject = f"Reminder: {reminder_title} from {sender_name}"
         
@@ -150,7 +135,7 @@ class EmailService:
         """
         
         return await EmailService.send_email(
-            service_account=service_account,
+            email_configuration=email_configuration,
             recipient_email=recipient_email,
             subject=subject,
             body=text_content,

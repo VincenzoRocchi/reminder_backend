@@ -1,8 +1,15 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+import enum
 
 from app.database import Base
+
+class ContactMethodEnum(str, enum.Enum):
+    """Enum for client contact method preferences"""
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    WHATSAPP = "WHATSAPP"
 
 class Client(Base):
     __tablename__ = "clients"
@@ -17,6 +24,11 @@ class Client(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Enhanced contact information
+    secondary_phone_number = Column(String(20), nullable=True)
+    whatsapp_phone_number = Column(String(20), nullable=True)
+    preferred_contact_method = Column(Enum(ContactMethodEnum), default=ContactMethodEnum.SMS)
     
     # Relationships
     user = relationship("User", back_populates="clients")

@@ -28,7 +28,8 @@ class ReminderBase(BaseModel):
     is_recurring: bool = False
     recurrence_pattern: Optional[str] = None
     is_active: bool = True
-    service_account_id: Optional[int] = None
+    email_configuration_id: Optional[int] = None
+    sender_identity_id: Optional[int] = None
 
 class ReminderCreate(ReminderBase):
     """Schema for creating a reminder"""
@@ -44,7 +45,7 @@ class ReminderUpdate(BaseModel):
     is_recurring: Optional[bool] = None
     recurrence_pattern: Optional[str] = None
     is_active: Optional[bool] = None
-    service_account_id: Optional[int] = None
+    email_configuration_id: Optional[int] = None
     client_ids: Optional[List[int]] = None  # IDs of clients to receive the reminder
 
 class ReminderInDBBase(ReminderBase):

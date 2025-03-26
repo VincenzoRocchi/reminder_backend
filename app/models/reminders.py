@@ -26,7 +26,8 @@ class Reminder(Base):
     description = Column(Text, nullable=True)
     reminder_type = Column(Enum(ReminderTypeEnum), nullable=False)
     notification_type = Column(Enum(NotificationTypeEnum), nullable=False)
-    service_account_id = Column(Integer, ForeignKey("service_accounts.id"), nullable=True)
+    email_configuration_id = Column(Integer, ForeignKey("email_configurations.id"), nullable=True)
+    sender_identity_id = Column(Integer, ForeignKey("sender_identities.id"), nullable=True)
     
     # Schedule information
     is_recurring = Column(Boolean, default=False)
@@ -39,9 +40,10 @@ class Reminder(Base):
     
     # Relationships
     user = relationship("User", back_populates="reminders")
-    service_account = relationship("ServiceAccount", back_populates="reminders")
+    email_configuration = relationship("EmailConfiguration", back_populates="reminders")
     reminder_recipients = relationship("ReminderRecipient", back_populates="reminder", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="reminder", cascade="all, delete-orphan")
+    sender_identity = relationship("SenderIdentity", back_populates="reminders")
     
     def __str__(self):
         return f"Reminder: {self.title} ({self.reminder_date})"

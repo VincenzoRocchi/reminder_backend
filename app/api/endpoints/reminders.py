@@ -7,7 +7,7 @@ from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.users import User as UserModel
 from app.models.reminders import Reminder as ReminderModel, NotificationTypeEnum
-from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel
+from app.models.emailConfigurations import EmailConfiguration as EmailConfigurationModel
 from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient
 from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
@@ -50,26 +50,18 @@ async def create_reminder(
     """
     Create a new reminder with client associations.
     """
-    # Verify service account belongs to user
-    if reminder_in.service_account_id:
-        service_account = db.query(ServiceAccountModel).filter(
-            ServiceAccountModel.id == reminder_in.service_account_id,
-            ServiceAccountModel.user_id == current_user.id
+    # Verify email configuration belongs to user if notification type is EMAIL
+    if reminder_in.notification_type == NotificationTypeEnum.EMAIL and reminder_in.email_configuration_id:
+        email_config = db.query(EmailConfigurationModel).filter(
+            EmailConfigurationModel.id == reminder_in.email_configuration_id,
+            EmailConfigurationModel.user_id == current_user.id
         ).first()
         
-        if not service_account:
+        if not email_config:
             raise AppException(
-                message="Service account not found or not owned by user",
-                code="SERVICE_ACCOUNT_NOT_FOUND",
+                message="Email configuration not found or not owned by user",
+                code="EMAIL_CONFIG_NOT_FOUND",
                 status_code=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Check that service type matches notification type
-        if service_account.service_type.value != reminder_in.notification_type.value:
-            raise AppException(
-                message=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({reminder_in.notification_type.value})",
-                code="SERVICE_TYPE_MISMATCH",
-                status_code=status.HTTP_400_BAD_REQUEST
             )
     
     # Verify clients exist and belong to user
@@ -196,27 +188,21 @@ async def update_reminder(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Verify service account if being updated
-    if reminder_in.service_account_id is not None:
-        service_account = db.query(ServiceAccountModel).filter(
-            ServiceAccountModel.id == reminder_in.service_account_id,
-            ServiceAccountModel.user_id == current_user.id
+    # Verify email configuration if being updated and notification type is EMAIL
+    if reminder_in.email_configuration_id is not None and (
+        reminder_in.notification_type == NotificationTypeEnum.EMAIL or 
+        (reminder_in.notification_type is None and reminder.notification_type == NotificationTypeEnum.EMAIL)
+    ):
+        email_config = db.query(EmailConfigurationModel).filter(
+            EmailConfigurationModel.id == reminder_in.email_configuration_id,
+            EmailConfigurationModel.user_id == current_user.id
         ).first()
         
-        if not service_account:
+        if not email_config:
             raise AppException(
-                message="Service account not found or not owned by user",
-                code="SERVICE_ACCOUNT_NOT_FOUND",
+                message="Email configuration not found or not owned by user",
+                code="EMAIL_CONFIG_NOT_FOUND",
                 status_code=status.HTTP_404_NOT_FOUND
-            )
-        
-        # If notification type is being updated, check compatibility
-        notification_type = reminder_in.notification_type or reminder.notification_type
-        if service_account.service_type.value != notification_type.value:
-            raise AppException(
-                message=f"Service account type ({service_account.service_type.value}) doesn't match notification type ({notification_type.value})",
-                code="SERVICE_TYPE_MISMATCH",
-                status_code=status.HTTP_400_BAD_REQUEST
             )
     
     # Update reminder fields

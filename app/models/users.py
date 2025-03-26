@@ -27,11 +27,16 @@ class User(Base):
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Usage tracking for billing
+    sms_count = Column(Integer, default=0)
+    whatsapp_count = Column(Integer, default=0)
+    last_billing_date = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
-    service_accounts = relationship("ServiceAccount", back_populates="user", cascade="all, delete-orphan")
+    email_configurations = relationship("EmailConfiguration", back_populates="user", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="user", cascade="all, delete-orphan")
     reminders = relationship("Reminder", back_populates="user", cascade="all, delete-orphan")
+    sender_identities = relationship("SenderIdentity", back_populates="user", cascade="all, delete-orphan")
     
     # Phone number encryption (using the same pattern as in Business model)
     @property
