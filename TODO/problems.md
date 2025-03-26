@@ -1,19 +1,5 @@
 # Identified Problems in Reminder Backend
 
-## Repository Pattern Missing
-
-API endpoints contain direct SQLAlchemy queries instead of using repository classes.  
-**Example**: In `app/api/endpoints/clients.py`, DB operations should be abstracted away.
-
----
-
-## Business Logic Location
-
-Business logic is often embedded in API endpoints rather than service classes.  
-**Example**: In `reminders.py`, the reminder calculation logic should be moved to a service.
-
----
-
 ## Error Handling
 
 Inconsistent error handling across different modules:
