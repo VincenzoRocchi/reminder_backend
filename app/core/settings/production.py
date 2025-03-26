@@ -33,6 +33,9 @@ class ProductionSettings(BaseAppSettings):
             raise ValueError("Production must use a proper database, not SQLite")
         return v
         
+    # Use Redis for token storage - required in production
+    USE_REDIS: bool = True
+    
     def model_post_init_handler(self, **kwargs):
         # No need to call super() if BaseAppSettings doesn't implement this method
         

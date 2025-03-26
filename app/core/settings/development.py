@@ -69,3 +69,9 @@ class DevelopmentSettings(BaseAppSettings):
         if v and 'sqlite' in v.lower():
             raise ValueError("Development must use a real database, not SQLite")
         return v
+
+    # This is already correctly defined in your development.py file
+    USE_REDIS: bool = Field(
+        default=os.getenv("USE_REDIS", "False").lower() == "true",
+        description="Use Redis for token storage (if False, in-memory storage will be used)"
+    )

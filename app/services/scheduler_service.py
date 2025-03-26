@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 
 from app.database import SessionLocal
-from app.models.reminders import Reminder, NotificationType
+from app.models.reminders import Reminder, NotificationTypeEnum
 from app.models.notifications import Notification, NotificationStatusEnum
 from app.models.users import User
 from app.services.email_service import EmailService
@@ -203,7 +203,7 @@ class SchedulerService:
             
     async def send_notification(
         self,
-        notification_type: NotificationType,
+        notification_type: NotificationTypeEnum,
         user,
         client,
         reminder,

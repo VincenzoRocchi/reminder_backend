@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.emailConfigurations import EmailConfiguration
 from app.schemas.emailConfigurations import EmailConfigurationCreate, EmailConfigurationUpdate
 

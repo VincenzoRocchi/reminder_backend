@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import all models to ensure they're included in migrations
 from app.models.users import User
-from app.models.emailConfigurations import ServiceAccount, ServiceTypeEnum
+from app.models.emailConfigurations import EmailConfiguration
 from app.models.clients import Client
 from app.models.reminders import Reminder, ReminderTypeEnum, NotificationTypeEnum
 from app.models.reminderRecipient import ReminderRecipient

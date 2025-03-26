@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.senderIdentities import SenderIdentity, IdentityTypeEnum
 from app.schemas.senderIdentities import SenderIdentityCreate, SenderIdentityUpdate
 

@@ -343,3 +343,10 @@ class BaseAppSettings(BaseSettings):
             assert self.DB_HOST != "localhost", "Production DB_HOST should not be localhost"
             if any([self.SMTP_HOST, self.SMTP_USER, self.SMTP_PASSWORD]):
                 assert all([self.SMTP_HOST, self.SMTP_USER, self.SMTP_PASSWORD]), "SMTP settings incomplete"
+
+    # Add this to the BaseAppSettings class, in the Redis configuration section
+
+    USE_REDIS: bool = Field(
+        default=os.getenv("USE_REDIS", "False").lower() == "true",
+        description="Whether to use Redis for tokens and caching (required in production, optional in development)"
+    )

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from datetime import datetime
 
-from app.repositories.base import BaseRepository
+from app.core.repositories.base import BaseRepository
 from app.models.notifications import Notification, NotificationStatusEnum
 from app.schemas.notifications import NotificationCreate, NotificationUpdate
 

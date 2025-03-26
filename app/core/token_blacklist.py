@@ -14,7 +14,8 @@ class TokenBlacklist:
     
     def __init__(self):
         self._blacklist: Dict[str, datetime] = {}
-        self._use_redis = settings.IS_PRODUCTION
+        # Use Redis only in production, use in-memory for development and testing
+        self._use_redis = settings.USE_REDIS
         
         if self._use_redis:
             try:
@@ -22,8 +23,16 @@ class TokenBlacklist:
                 redis_connection.client.ping()
                 logger.info("Using Redis for token blacklist")
             except RedisError as e:
-                logger.warning(f"Redis connection failed, falling back to in-memory storage: {str(e)}")
-                self._use_redis = False
+                # In production, we should fail if Redis is not available
+                if settings.IS_PRODUCTION:
+                    logger.error(f"Redis connection failed in production environment: {str(e)}")
+                    raise RedisError(f"Redis is required in production mode: {str(e)}")
+                else:
+                    # In development, we can fall back to in-memory if USE_REDIS=True but Redis fails
+                    logger.warning(f"Redis connection failed, falling back to in-memory storage: {str(e)}")
+                    self._use_redis = False
+        else:
+            logger.info("Using in-memory token blacklist for development/testing")
     
     def add_token(self, jti: str, expires_at: datetime) -> None:
         """Add a token to the blacklist"""
@@ -41,10 +50,15 @@ class TokenBlacklist:
                 self._blacklist[jti] = expires_at
                 
         except RedisError as e:
-            logger.error(f"Failed to add token to blacklist: {str(e)}")
-            # Fall back to in-memory storage if Redis fails
-            self._use_redis = False
-            self._blacklist[jti] = expires_at
+            # In production, we should raise the error
+            if settings.IS_PRODUCTION:
+                logger.error(f"Failed to add token to Redis blacklist: {str(e)}")
+                raise
+            else:
+                # In development, we can fall back to in-memory
+                logger.error(f"Failed to add token to blacklist: {str(e)}")
+                self._use_redis = False
+                self._blacklist[jti] = expires_at
     
     def is_blacklisted(self, jti: str) -> bool:
         """Check if a token is blacklisted"""
@@ -57,11 +71,16 @@ class TokenBlacklist:
                 return jti in self._blacklist
                 
         except RedisError as e:
-            logger.error(f"Failed to check token blacklist: {str(e)}")
-            # Fall back to in-memory storage if Redis fails
-            self._use_redis = False
-            self._clean_expired()
-            return jti in self._blacklist
+            # In production, we should raise the error
+            if settings.IS_PRODUCTION:
+                logger.error(f"Failed to check Redis token blacklist: {str(e)}")
+                raise
+            else:
+                # In development, we can fall back to in-memory
+                logger.error(f"Failed to check token blacklist: {str(e)}")
+                self._use_redis = False
+                self._clean_expired()
+                return jti in self._blacklist
     
     def _clean_expired(self) -> None:
         """Remove expired tokens from in-memory blacklist"""

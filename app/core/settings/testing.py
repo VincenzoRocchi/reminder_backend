@@ -23,3 +23,6 @@ class TestingSettings(BaseAppSettings):
                 "by setting ENV=development."
             )
         return v
+
+# Redis is not required for tests
+USE_REDIS: bool = False
