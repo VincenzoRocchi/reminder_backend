@@ -12,8 +12,7 @@ from app.models.reminders import Reminder, NotificationTypeEnum
 from app.models.notifications import Notification, NotificationStatusEnum
 from app.models.users import User
 from app.services.email_service import EmailService
-from app.services.sms_service import SMSService
-from app.services.whatsapp_service import WhatsAppService
+from app.services.twilio_service import TwilioService
 from app.models.emailConfigurations import EmailConfiguration
 from app.models.senderIdentities import SenderIdentity
 from app.models.clients import Client
@@ -95,7 +94,7 @@ class SchedulerService:
                 
                 # For email reminders, ensure we have a valid email configuration
                 email_configuration = None
-                if reminder.notification_type == NotificationType.EMAIL:
+                if reminder.notification_type == NotificationTypeEnum.EMAIL:
                     if reminder.email_configuration_id:
                         email_configuration = db.query(EmailConfiguration).filter(
                             EmailConfiguration.id == reminder.email_configuration_id,
@@ -225,7 +224,7 @@ class SchedulerService:
             True if notification was sent successfully, False otherwise
         """
         try:
-            if notification_type == NotificationType.EMAIL:
+            if notification_type == NotificationTypeEnum.EMAIL:
                 # For email, we use email configurations
                 if not client.email:
                     logger.warning(f"Cannot send email notification: Missing email for client {client.id}")
@@ -244,49 +243,87 @@ class SchedulerService:
                     sender_identity=sender_identity
                 )
                 
-            elif notification_type == NotificationType.SMS:
-                # Determine which phone number to use
-                phone_number = None
+            elif notification_type == NotificationTypeEnum.SMS:
+                # Determine which phone number to use for recipient
+                recipient_phone = None
                 if hasattr(client, 'preferred_contact_method') and client.preferred_contact_method == "SMS" and hasattr(client, 'secondary_phone_number') and client.secondary_phone_number:
-                    phone_number = client.secondary_phone_number
+                    recipient_phone = client.secondary_phone_number
                 else:
-                    phone_number = client.phone_number
+                    recipient_phone = client.phone_number
                     
-                if not phone_number:
+                if not recipient_phone:
                     logger.warning(f"Cannot send SMS notification: Missing phone number for client {client.id}")
                     return False
                 
-                return SMSService.send_reminder_sms(
+                # Determine which phone number to use for sender (from number)
+                from_phone_number = None
+                
+                # First check if we have a sender identity with a PHONE type
+                if sender_identity and hasattr(sender_identity, 'identity_type') and sender_identity.identity_type == "PHONE":
+                    from_phone_number = sender_identity.value
+                    logger.info(f"Using sender identity phone {from_phone_number} for SMS")
+                # Fallback to user's phone number
+                elif hasattr(user, 'phone_number') and user.phone_number:
+                    from_phone_number = user.phone_number
+                    logger.info(f"Using user's phone number for SMS")
+                
+                if not from_phone_number:
+                    logger.error(f"Cannot send SMS notification: No sender phone number available")
+                    return False
+                
+                # Use the TwilioService to send SMS
+                return TwilioService.send_reminder_message(
                     user=user,
-                    sender_identity=sender_identity,
-                    recipient_phone=phone_number,
+                    recipient_phone=recipient_phone,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
+                    from_phone_number=from_phone_number,
+                    sender_identity=sender_identity,
+                    channel="sms"
                 )
                 
-            elif notification_type == NotificationType.WHATSAPP:
-                # Determine which phone number to use
-                phone_number = None
+            elif notification_type == NotificationTypeEnum.WHATSAPP:
+                # Determine which phone number to use for recipient
+                recipient_phone = None
                 if hasattr(client, 'preferred_contact_method') and client.preferred_contact_method == "WHATSAPP":
                     if hasattr(client, 'whatsapp_phone_number') and client.whatsapp_phone_number:
-                        phone_number = client.whatsapp_phone_number
+                        recipient_phone = client.whatsapp_phone_number
                     elif hasattr(client, 'secondary_phone_number') and client.secondary_phone_number:
-                        phone_number = client.secondary_phone_number
+                        recipient_phone = client.secondary_phone_number
                     else:
-                        phone_number = client.phone_number
+                        recipient_phone = client.phone_number
                 else:
-                    phone_number = client.phone_number
+                    recipient_phone = client.phone_number
                     
-                if not phone_number:
+                if not recipient_phone:
                     logger.warning(f"Cannot send WhatsApp notification: Missing phone number for client {client.id}")
                     return False
                 
-                return await WhatsAppService.send_reminder_whatsapp(
+                # Determine which phone number to use for sender (from number)
+                from_phone_number = None
+                
+                # First check if we have a sender identity with a PHONE type
+                if sender_identity and hasattr(sender_identity, 'identity_type') and sender_identity.identity_type == "PHONE":
+                    from_phone_number = sender_identity.value
+                    logger.info(f"Using sender identity phone {from_phone_number} for WhatsApp")
+                # Fallback to user's phone number
+                elif hasattr(user, 'phone_number') and user.phone_number:
+                    from_phone_number = user.phone_number
+                    logger.info(f"Using user's phone number for WhatsApp")
+                
+                if not from_phone_number:
+                    logger.error(f"Cannot send WhatsApp notification: No sender phone number available")
+                    return False
+                
+                # Use the TwilioService to send WhatsApp
+                return TwilioService.send_reminder_message(
                     user=user,
-                    sender_identity=sender_identity,
-                    recipient_phone=phone_number,
+                    recipient_phone=recipient_phone,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
+                    from_phone_number=from_phone_number,
+                    sender_identity=sender_identity,
+                    channel="whatsapp"
                 )
             
             logger.error(f"Unsupported notification type: {notification_type}")

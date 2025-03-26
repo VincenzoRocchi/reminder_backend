@@ -44,9 +44,3 @@ def validate_smtp_password(password: str) -> str:
     if len(password) < 8:
         raise ValueError("SMTP password must be at least 8 characters")
     return password
-
-# Validation function for WhatsApp API key
-def validate_whatsapp_api_key(key: str) -> str:
-    if len(key) < 16:
-        raise ValueError("WhatsApp API key must be at least 16 characters")
-    return key

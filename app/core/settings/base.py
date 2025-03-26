@@ -82,17 +82,12 @@ class BaseAppSettings(BaseSettings):
     EMAIL_FROM: str = Field(default=os.getenv("EMAIL_FROM", "noreply@reminderapp.com"), description="From email address")
     
     # ------------------------------
-    # SMS SETTINGS (TWILIO)
+    # TWILIO SETTINGS (SMS & WHATSAPP)
     # ------------------------------
     TWILIO_ACCOUNT_SID: str = Field(default=os.getenv("TWILIO_ACCOUNT_SID", ""), description="Twilio account SID")
     TWILIO_AUTH_TOKEN: str = Field(default=os.getenv("TWILIO_AUTH_TOKEN", ""), description="Twilio authentication token")
-    TWILIO_PHONE_NUMBER: str = Field(default=os.getenv("TWILIO_PHONE_NUMBER", ""), description="Twilio phone number")
-    
-    # ------------------------------
-    # WHATSAPP SETTINGS
-    # ------------------------------
-    WHATSAPP_API_KEY: str = Field(default=os.getenv("WHATSAPP_API_KEY", ""), description="WhatsApp API key")
-    WHATSAPP_API_URL: str = Field(default=os.getenv("WHATSAPP_API_URL", ""), description="WhatsApp API endpoint URL")
+    # Each client will provide their own phone number when sending messages
+    # No default phone number is stored in application settings
     
     # ------------------------------
     # STRIPE SETTINGS (PAYMENT GATEWAY)

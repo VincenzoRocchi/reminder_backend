@@ -75,10 +75,6 @@ def initialize_secrets(env):
                 "twilio_auth_token": "your_twilio_test_token",
                 "twilio_phone_number": "your_twilio_test_phone"
             },
-            "whatsapp": {
-                "api_key": "your_whatsapp_api_key",
-                "api_url": "https://api.example.com"
-            },
             "payment": {
                 "stripe_api_key": "your_stripe_test_key",
                 "stripe_webhook_secret": "your_stripe_webhook_test_secret"
@@ -112,7 +108,6 @@ def initialize_secrets(env):
             "security": {},
             "email": {},
             "sms": {},
-            "whatsapp": {},
             "payment": {},
             "s3": {}
         }
@@ -238,7 +233,7 @@ def main():
             # Get all categories and secrets
             categories = [
                 "database", "security", "email", "sms", 
-                "whatsapp", "payment", "s3"
+                "payment", "s3"
             ]
             
             for category in categories:
@@ -266,7 +261,7 @@ def main():
             # Get all categories and secrets
             categories = [
                 "database", "security", "email", "sms", 
-                "whatsapp", "payment", "s3"
+                "payment", "s3"
             ]
             
             print(f"Secrets for {args.env} environment:")

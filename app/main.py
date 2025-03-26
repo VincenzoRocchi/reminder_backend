@@ -81,6 +81,14 @@ async def startup_event():
     """Initialize services when application starts"""
     logger.info(f"Starting application in {settings.ENV} environment")
     
+    # Run security checks
+    from app.core.security_checker import check_security_at_startup
+    security_results = check_security_at_startup(settings)
+    if security_results["total_errors"] > 0 and settings.ENV == "production":
+        logger.critical(f"Production environment has {security_results['total_errors']} security issues")
+        # In a real-world scenario, you might want to prevent startup in production
+        # if critical security issues are found
+    
     # Import here to avoid circular imports
     from app.services.scheduler_service import scheduler_service
     scheduler_service.start()

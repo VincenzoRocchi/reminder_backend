@@ -3,6 +3,7 @@
 This document outlines the database architecture, ORM configuration, and best practices for the Reminder App backend.
 
 ## Table of Contents
+
 - [Architecture Overview](#architecture-overview)
 - [Database Configuration](#database-configuration)
 - [Connection Pooling](#connection-pooling)
@@ -62,7 +63,7 @@ engine_args = {
 }
 ```
 
-### Key Configuration Parameters:
+### Key Configuration Parameters
 
 - **pool_pre_ping**: Tests connections before use to detect stale connections
 - **pool_recycle**: Prevents using connections that have been idle for too long
@@ -70,7 +71,7 @@ engine_args = {
 - **max_overflow**: Additional connections allowed beyond pool_size during high load
 - **pool_timeout**: How long to wait for a connection when the pool is fully utilized
 
-### Production Recommendations:
+### Production Recommendations
 
 - For AWS RDS, set `pool_size` to approximately 10-20% of the maximum connections allowed
 - Monitor connection usage during peak loads to adjust `max_overflow` appropriately
@@ -80,12 +81,12 @@ engine_args = {
 
 SQLAlchemy model relationships should follow these best practices:
 
-1. **Always define bidirectional relationships**: Use `relationship()` with `back_populates` 
+1. **Always define bidirectional relationships**: Use `relationship()` with `back_populates`
 2. **Cascade delete for parent-child relationships**: Use `cascade="all, delete-orphan"` for one-to-many relationships
 3. **Use lazy loading appropriately**: Default is `lazy="select"`, but consider `lazy="joined"` for commonly accessed relationships
 4. **Define constraints at the database level**: Use `UniqueConstraint`, `CheckConstraint`, etc.
 
-### Example Pattern:
+### Example Pattern
 
 ```python
 # Parent model
@@ -139,7 +140,7 @@ alembic upgrade <revision_id>
 alembic downgrade -1
 ```
 
-### Best Practices:
+### Best Practices
 
 1. **Always review auto-generated migrations** before applying them
 2. **Test migrations** in development environment before production
@@ -148,21 +149,25 @@ alembic downgrade -1
 
 ## Performance Optimization
 
-### Query Optimization:
+### Query Optimization
 
 1. **Use specific queries** instead of loading entire objects when possible
 2. **Eager load related objects** when you know you'll need them:
+
    ```python
    db.query(User).options(joinedload(User.reminders)).filter_by(id=user_id).first()
    ```
+
 3. **Use pagination** for large result sets:
+
    ```python
    query = db.query(Reminder).filter_by(user_id=user_id)
    page = query.offset((page_num - 1) * per_page).limit(per_page).all()
    ```
+
 4. **Add indexes** for frequently filtered columns
 
-### Avoiding N+1 Query Problems:
+### Avoiding N+1 Query Problems
 
 The N+1 query problem occurs when you load a parent object and then separately load each of its children:
 
@@ -189,6 +194,7 @@ for user in users:
 Regular database maintenance tasks should include:
 
 1. **Health monitoring**:
+
    ```bash
    python -m scripts.db_health_check --env production --output health_report.json
    ```
@@ -207,4 +213,4 @@ Regular database maintenance tasks should include:
 
 5. **Regular backups**:
    - Automated daily backups
-   - Test restoration procedures regularly 
+   - Test restoration procedures regularly

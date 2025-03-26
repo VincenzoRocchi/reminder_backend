@@ -16,6 +16,7 @@ pyproject.toml
 .vscode
 *.db
 secrets/
+*.env
 
 # Virtual environments
 .venv

@@ -1,4 +1,22 @@
 # app/services/sms_service.py
+
+# DEPRECATED: This service is no longer used.
+# 
+# SMS functionality has been consolidated with WhatsApp in the new TwilioService
+# since both are handled through Twilio's API with similar parameters.
+#
+# Please use app.services.twilio_service.TwilioService instead.
+# 
+# For SMS messages:
+#   - TwilioService.send_sms() or
+#   - TwilioService.send_message(channel="sms") or
+#   - TwilioService.send_reminder_message(channel="sms")
+#
+# For WhatsApp messages:
+#   - TwilioService.send_whatsapp() or
+#   - TwilioService.send_message(channel="whatsapp") or
+#   - TwilioService.send_reminder_message(channel="whatsapp")
+
 import logging
 from twilio.rest import Client
 from typing import Optional
