@@ -4,6 +4,7 @@ from twilio.rest import Client
 from typing import Optional
 
 from app.core.settings import settings
+from app.core.exceptions import ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class SMSService:
             
         except Exception as e:
             logger.error(f"Failed to send SMS to {recipient_phone}: {str(e)}")
-            return False
+            raise ServiceError("sms", "Failed to send SMS", str(e))
     
     @staticmethod
     def send_reminder_sms(

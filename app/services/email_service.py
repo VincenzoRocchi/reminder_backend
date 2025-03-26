@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from typing import List, Optional
 
 from app.core.settings import settings
+from app.core.exceptions import ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class EmailService:
             
         except Exception as e:
             logger.error(f"Failed to send email to {recipient_email}: {str(e)}")
-            return False
+            raise ServiceError("email", "Failed to send email", str(e))
     
     @staticmethod
     async def send_reminder_email(

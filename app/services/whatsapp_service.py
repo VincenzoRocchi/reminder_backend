@@ -4,6 +4,7 @@ import httpx
 from typing import Optional
 
 from app.core.settings import settings
+from app.core.exceptions import ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +94,10 @@ class WhatsAppService:
                 else:
                     logger.error(f"Failed to send WhatsApp message: {response.text}")
                     return False
-            
+                
         except Exception as e:
             logger.error(f"Failed to send WhatsApp message to {recipient_phone}: {str(e)}")
-            return False
+            raise ServiceError("whatsapp", "Failed to send WhatsApp message", str(e))
     
     @staticmethod
     async def send_reminder_whatsapp(

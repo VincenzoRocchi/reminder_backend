@@ -16,6 +16,7 @@ from app.services.whatsapp_service import WhatsAppService
 from app.models.serviceAccounts import ServiceAccount
 from app.models.clients import Client
 from app.models.reminderRecipient import ReminderRecipient
+from app.core.exceptions import ServiceError
 
 # Configure module-level logger for this service
 # This allows targeted log filtering and appropriate log levels
@@ -203,63 +204,63 @@ class SchedulerService:
         finally:
             db.close()
             
-    async def send_notification(
-        self,
-        notification_type: NotificationType,
-        service_account,
-        user,
-        client,
-        reminder,
-    ) -> bool:
-        """
-        Send a notification based on its configured type.
-        """
-        try:
-            if notification_type == NotificationType.EMAIL:
-                if not client.email:
-                    logger.warning(f"Cannot send email notification: Missing email for client {client.id}")
-                    return False
-                
-                return await EmailService.send_reminder_email(
-                    service_account=service_account,
-                    user=user,
-                    recipient_email=client.email,
-                    reminder_title=reminder.title,
-                    reminder_description=reminder.description or "",
-                )
-                
-            elif notification_type == NotificationType.SMS:
-                if not client.phone_number:
-                    logger.warning(f"Cannot send SMS notification: Missing phone number for client {client.id}")
-                    return False
-                
-                return SMSService.send_reminder_sms(
-                    service_account=service_account,
-                    user=user,
-                    recipient_phone=client.phone_number,
-                    reminder_title=reminder.title,
-                    reminder_description=reminder.description,
-                )
-                
-            elif notification_type == NotificationType.WHATSAPP:
-                if not client.phone_number:
-                    logger.warning(f"Cannot send WhatsApp notification: Missing phone number for client {client.id}")
-                    return False
-                
-                return await WhatsAppService.send_reminder_whatsapp(
-                    service_account=service_account,
-                    user=user,
-                    recipient_phone=client.phone_number,
-                    reminder_title=reminder.title,
-                    reminder_description=reminder.description,
-                )
+async def send_notification(
+    self,
+    notification_type: NotificationType,
+    service_account,
+    user,
+    client,
+    reminder,
+) -> bool:
+    try:
+        if notification_type == NotificationType.EMAIL:
+            if not client.email:
+                logger.warning(f"Cannot send email notification: Missing email for client {client.id}")
+                return False
             
-            logger.error(f"Unsupported notification type: {notification_type}")
-            return False
+            return await EmailService.send_reminder_email(
+                service_account=service_account,
+                user=user,
+                recipient_email=client.email,
+                reminder_title=reminder.title,
+                reminder_description=reminder.description or "",
+            )
             
-        except Exception as e:
-            logger.error(f"Error sending {notification_type} notification: {str(e)}", exc_info=True)
-            return False
+        elif notification_type == NotificationType.SMS:
+            if not client.phone_number:
+                logger.warning(f"Cannot send SMS notification: Missing phone number for client {client.id}")
+                return False
+            
+            return SMSService.send_reminder_sms(
+                service_account=service_account,
+                user=user,
+                recipient_phone=client.phone_number,
+                reminder_title=reminder.title,
+                reminder_description=reminder.description,
+            )
+            
+        elif notification_type == NotificationType.WHATSAPP:
+            if not client.phone_number:
+                logger.warning(f"Cannot send WhatsApp notification: Missing phone number for client {client.id}")
+                return False
+            
+            return await WhatsAppService.send_reminder_whatsapp(
+                service_account=service_account,
+                user=user,
+                recipient_phone=client.phone_number,
+                reminder_title=reminder.title,
+                reminder_description=reminder.description,
+            )
+        
+        logger.error(f"Unsupported notification type: {notification_type}")
+        return False
+        
+    except ServiceError as se:
+        logger.error(f"Service error: {se.message}", exc_info=True)
+        return False
+    except Exception as e:
+        logger.error(f"Error sending {notification_type} notification: {str(e)}", exc_info=True)
+        return False
         
     def calculate_next_reminder_date(self, current_date: datetime, pattern: str) -> datetime:
         """
