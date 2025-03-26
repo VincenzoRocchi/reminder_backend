@@ -29,3 +29,4 @@ def validate_strict_validation(cls, v):
 ## Schema Validation
 
 - Added `ValidationError` for schema validation. Use it in schema validators instead of `ValueError`.
+
