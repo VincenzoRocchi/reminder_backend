@@ -15,6 +15,7 @@ psw.txt
 pyproject.toml
 .vscode
 *.db
+secrets/
 
 # Virtual environments
 .venv
