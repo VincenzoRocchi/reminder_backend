@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.users import User as UserModel
-from app.models.senderIdentities import SenderIdentity as SenderIdentityModel, IdentityTypeEnum
+from app.models.senderIdentities import IdentityTypeEnum
 from app.schemas.senderIdentities import SenderIdentity, SenderIdentityCreate, SenderIdentityUpdate
-from app.core.exceptions import AppException, DatabaseError
+from app.core.exceptions import AppException
+from app.services.senderIdentity import sender_identity_service
 
 router = APIRouter()
 
@@ -23,21 +24,25 @@ async def read_sender_identities(
     Retrieve all sender identities for the current user.
     Optionally filter by identity type.
     """
-    query = db.query(SenderIdentityModel).filter(SenderIdentityModel.user_id == current_user.id)
-    
     if identity_type:
         try:
             identity_type_enum = IdentityTypeEnum(identity_type)
-            query = query.filter(SenderIdentityModel.identity_type == identity_type_enum)
         except ValueError:
             raise AppException(
                 message=f"Invalid identity type: {identity_type}",
                 code="INVALID_IDENTITY_TYPE",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-    
-    identities = query.offset(skip).limit(limit).all()
-    return identities
+    else:
+        identity_type_enum = None
+
+    return sender_identity_service.get_user_sender_identities(
+        db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+        identity_type=identity_type_enum
+    )
 
 @router.post("/", response_model=SenderIdentity, status_code=status.HTTP_201_CREATED)
 async def create_sender_identity(
@@ -48,40 +53,11 @@ async def create_sender_identity(
     """
     Create a new sender identity for the current user.
     """
-    # Convert Pydantic enum to SQLAlchemy enum
-    identity_type_value = IdentityTypeEnum(identity_in.identity_type.value)
-    
-    # If this is being set as default, unset any existing defaults of the same type
-    if identity_in.is_default:
-        existing_defaults = db.query(SenderIdentityModel).filter(
-            SenderIdentityModel.user_id == current_user.id,
-            SenderIdentityModel.identity_type == identity_type_value,
-            SenderIdentityModel.is_default == True
-        ).all()
-        
-        for default_identity in existing_defaults:
-            default_identity.is_default = False
-            db.add(default_identity)
-    
-    # Create the sender identity
-    identity_data = identity_in.model_dump()
-    identity_data["identity_type"] = identity_type_value
-    
-    sender_identity = SenderIdentityModel(
-        user_id=current_user.id,
-        is_verified=False,  # New identities start as unverified
-        **identity_data
+    return sender_identity_service.create_sender_identity(
+        db,
+        identity_in=identity_in,
+        user_id=current_user.id
     )
-    
-    try:
-        db.add(sender_identity)
-        db.commit()
-        db.refresh(sender_identity)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
-    return sender_identity
 
 @router.get("/{identity_id}", response_model=SenderIdentity)
 async def read_sender_identity(
@@ -92,19 +68,11 @@ async def read_sender_identity(
     """
     Get a specific sender identity by ID.
     """
-    identity = db.query(SenderIdentityModel).filter(
-        SenderIdentityModel.id == identity_id,
-        SenderIdentityModel.user_id == current_user.id
-    ).first()
-    
-    if not identity:
-        raise AppException(
-            message="Sender identity not found",
-            code="IDENTITY_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    return identity
+    return sender_identity_service.get_sender_identity(
+        db,
+        identity_id=identity_id,
+        user_id=current_user.id
+    )
 
 @router.put("/{identity_id}", response_model=SenderIdentity)
 async def update_sender_identity(
@@ -116,45 +84,12 @@ async def update_sender_identity(
     """
     Update a sender identity.
     """
-    identity = db.query(SenderIdentityModel).filter(
-        SenderIdentityModel.id == identity_id,
-        SenderIdentityModel.user_id == current_user.id
-    ).first()
-    
-    if not identity:
-        raise AppException(
-            message="Sender identity not found",
-            code="IDENTITY_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # If setting as default, unset any existing defaults of the same type
-    if identity_in.is_default:
-        existing_defaults = db.query(SenderIdentityModel).filter(
-            SenderIdentityModel.user_id == current_user.id,
-            SenderIdentityModel.identity_type == identity.identity_type,
-            SenderIdentityModel.is_default == True,
-            SenderIdentityModel.id != identity_id
-        ).all()
-        
-        for default_identity in existing_defaults:
-            default_identity.is_default = False
-            db.add(default_identity)
-    
-    # Update fields
-    update_data = identity_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(identity, field, value)
-    
-    try:
-        db.add(identity)
-        db.commit()
-        db.refresh(identity)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
-    return identity
+    return sender_identity_service.update_sender_identity(
+        db,
+        identity_id=identity_id,
+        user_id=current_user.id,
+        identity_in=identity_in
+    )
 
 @router.delete("/{identity_id}")
 async def delete_sender_identity(
@@ -165,25 +100,11 @@ async def delete_sender_identity(
     """
     Delete a sender identity.
     """
-    identity = db.query(SenderIdentityModel).filter(
-        SenderIdentityModel.id == identity_id,
-        SenderIdentityModel.user_id == current_user.id
-    ).first()
-    
-    if not identity:
-        raise AppException(
-            message="Sender identity not found",
-            code="IDENTITY_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    try:
-        db.delete(identity)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
+    sender_identity_service.delete_sender_identity(
+        db,
+        identity_id=identity_id,
+        user_id=current_user.id
+    )
     return {"detail": "Sender identity deleted successfully"}
 
 @router.post("/{identity_id}/verify", response_model=SenderIdentity)
@@ -197,28 +118,8 @@ async def verify_sender_identity(
     In a real implementation, this would involve sending a verification code
     and verifying that the user owns the phone number or email.
     """
-    identity = db.query(SenderIdentityModel).filter(
-        SenderIdentityModel.id == identity_id,
-        SenderIdentityModel.user_id == current_user.id
-    ).first()
-    
-    if not identity:
-        raise AppException(
-            message="Sender identity not found",
-            code="IDENTITY_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # In production, this would require actual verification
-    # For now, just mark as verified
-    identity.is_verified = True
-    
-    try:
-        db.add(identity)
-        db.commit()
-        db.refresh(identity)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
-    return identity
+    return sender_identity_service.verify_sender_identity(
+        db,
+        identity_id=identity_id,
+        user_id=current_user.id
+    )

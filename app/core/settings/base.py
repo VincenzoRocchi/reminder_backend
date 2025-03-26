@@ -156,6 +156,30 @@ class BaseAppSettings(BaseSettings):
     OPENAPI_URL: str = Field(default=os.getenv("OPENAPI_URL", "/openapi.json"), description="URL per il file OpenAPI JSON")
     
     # ------------------------------
+    # CONFIGURAZIONE REDIS
+    # ------------------------------
+    REDIS_URL: str = Field(
+        default=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        description="URL di connessione Redis (es: redis://localhost:6379/0)"
+    )
+    REDIS_PASSWORD: Optional[SecretStr] = Field(
+        default=SecretStr(os.getenv("REDIS_PASSWORD", "")) if os.getenv("REDIS_PASSWORD") else None,
+        description="Password Redis (opzionale)"
+    )
+    REDIS_SSL_ENABLED: bool = Field(
+        default=os.getenv("REDIS_SSL_ENABLED", "False").lower() == "true",
+        description="Abilita connessione SSL per Redis"
+    )
+    REDIS_CONNECTION_TIMEOUT: int = Field(
+        default=int(os.getenv("REDIS_CONNECTION_TIMEOUT", "5")),
+        description="Timeout in secondi per la connessione Redis"
+    )
+    REDIS_HEALTH_CHECK_INTERVAL: int = Field(
+        default=int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30")),
+        description="Intervallo in secondi per il controllo dello stato Redis"
+    )
+    
+    # ------------------------------
     # CONFIGURAZIONE PYDANTIC
     # ------------------------------
     model_config = ConfigDict(
@@ -234,6 +258,14 @@ class BaseAppSettings(BaseSettings):
                     self.S3_ACCESS_KEY = s3_secrets['access_key']
                 if 'secret_key' in s3_secrets and s3_secrets['secret_key']:
                     self.S3_SECRET_KEY = s3_secrets['secret_key']
+            
+            # Redis credentials
+            redis_secrets = secrets_manager.get_category('redis')
+            if redis_secrets:
+                if 'password' in redis_secrets:
+                    self.REDIS_PASSWORD = redis_secrets['password']
+                if 'url' in redis_secrets:
+                    self.REDIS_URL = redis_secrets['url']
                     
         except Exception as e:
             # Log the error but continue with environment variables

@@ -1,10 +1,40 @@
 class AppException(Exception):
-    """Base exception class for application errors"""
-    def __init__(self, message: str, code: str = "GENERIC_ERROR", status_code: int = 400):
+    """Base exception for all application errors."""
+    def __init__(self, message: str):
         self.message = message
-        self.code = code
-        self.status_code = status_code
-        super().__init__(message)
+        super().__init__(self.message)
+
+class UserNotFoundError(AppException):
+    """Raised when a user is not found."""
+    pass
+
+class UserAlreadyExistsError(AppException):
+    """Raised when trying to create a user that already exists."""
+    pass
+
+class InvalidCredentialsError(AppException):
+    """Raised when user credentials are invalid."""
+    pass
+
+class ClientNotFoundError(AppException):
+    """Raised when a client is not found."""
+    pass
+
+class ClientAlreadyExistsError(AppException):
+    """Raised when trying to create a client that already exists."""
+    pass
+
+class RedisError(AppException):
+    """Raised when Redis operations fail."""
+    pass
+
+class SensitiveDataStorageError(AppException):
+    """Raised when sensitive data storage operations fail."""
+    pass
+
+class InvalidConfigurationError(AppException):
+    """Raised when configuration is invalid."""
+    pass
 
 class EncryptionError(AppException):
     """Exception for encryption/decryption failures"""
@@ -15,15 +45,6 @@ class EncryptionError(AppException):
             status_code=500
         )
 
-class InvalidConfigurationError(AppException):
-    """Exception for invalid service configurations"""
-    def __init__(self, service: str, reason: str):
-        super().__init__(
-            message=f"Invalid {service} configuration: {reason}",
-            code="INVALID_CONFIGURATION",
-            status_code=400
-        )
-
 class SecurityException(AppException):
     """Base exception for security-related errors"""
     def __init__(self, message: str, code: str = "SECURITY_ERROR"):
@@ -31,14 +52,6 @@ class SecurityException(AppException):
             message=message,
             code=code,
             status_code=403
-        )
-
-class SensitiveDataStorageError(SecurityException):
-    """Exception for failed sensitive data storage"""
-    def __init__(self, field: str):
-        super().__init__(
-            message=f"Failed to securely store {field}",
-            code="SENSITIVE_DATA_STORAGE_FAILURE"
         )
 
 class TokenExpiredError(SecurityException):
@@ -115,3 +128,39 @@ class ValidationError(AppException):
             code="VALIDATION_ERROR",
             status_code=422
         )
+
+class ReminderNotFoundError(Exception):
+    """Raised when a reminder is not found."""
+    pass
+
+class ReminderAlreadyExistsError(Exception):
+    """Raised when trying to create a reminder that already exists."""
+    pass
+
+class InvalidReminderConfigurationError(Exception):
+    """Raised when reminder configuration is invalid."""
+    pass
+
+class EmailConfigurationNotFoundError(Exception):
+    """Raised when an email configuration is not found."""
+    pass
+
+class EmailConfigurationAlreadyExistsError(Exception):
+    """Raised when trying to create an email configuration that already exists."""
+    pass
+
+class SenderIdentityNotFoundError(Exception):
+    """Raised when a sender identity is not found."""
+    pass
+
+class SenderIdentityAlreadyExistsError(Exception):
+    """Raised when trying to create a sender identity that already exists."""
+    pass
+
+class NotificationNotFoundError(Exception):
+    """Raised when a notification is not found."""
+    pass
+
+class ReminderRecipientNotFoundError(Exception):
+    """Raised when a reminder recipient is not found."""
+    pass

@@ -1,17 +1,14 @@
 from typing import List, Annotated
 from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.users import User as UserModel
-from app.models.reminders import Reminder as ReminderModel, NotificationTypeEnum
-from app.models.emailConfigurations import EmailConfiguration as EmailConfigurationModel
-from app.models.clients import Client as ClientModel
-from app.models.reminderRecipient import ReminderRecipient
+from app.models.reminders import NotificationTypeEnum
 from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
-from app.core.exceptions import AppException, DatabaseError
+from app.core.exceptions import AppException
+from app.services.reminder import reminder_service
 
 router = APIRouter()
 
@@ -28,18 +25,14 @@ async def read_reminders(
     Retrieve reminders for the current user.
     Optionally filter by active status or service account.
     """
-    query = db.query(ReminderModel).filter(ReminderModel.user_id == current_user.id)
-    
-    # Filter by active status if requested
-    if active_only:
-        query = query.filter(ReminderModel.is_active == True)
-    
-    # Filter by service account if provided
-    if service_account_id:
-        query = query.filter(ReminderModel.service_account_id == service_account_id)
-    
-    reminders = query.order_by(ReminderModel.reminder_date.desc()).offset(skip).limit(limit).all()
-    return reminders
+    return reminder_service.get_user_reminders(
+        db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+        active_only=active_only,
+        service_account_id=service_account_id
+    )
 
 @router.post("/", response_model=ReminderDetail, status_code=status.HTTP_201_CREATED)
 async def create_reminder(
@@ -50,77 +43,11 @@ async def create_reminder(
     """
     Create a new reminder with client associations.
     """
-    # Verify email configuration belongs to user if notification type is EMAIL
-    if reminder_in.notification_type == NotificationTypeEnum.EMAIL and reminder_in.email_configuration_id:
-        email_config = db.query(EmailConfigurationModel).filter(
-            EmailConfigurationModel.id == reminder_in.email_configuration_id,
-            EmailConfigurationModel.user_id == current_user.id
-        ).first()
-        
-        if not email_config:
-            raise AppException(
-                message="Email configuration not found or not owned by user",
-                code="EMAIL_CONFIG_NOT_FOUND",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-    
-    # Verify clients exist and belong to user
-    client_ids = reminder_in.client_ids
-    if client_ids:
-        clients = db.query(ClientModel).filter(
-            ClientModel.id.in_(client_ids),
-            ClientModel.user_id == current_user.id
-        ).all()
-        
-        found_client_ids = [client.id for client in clients]
-        missing_client_ids = set(client_ids) - set(found_client_ids)
-        
-        if missing_client_ids:
-            raise AppException(
-                message=f"Clients not found or not owned by user: {missing_client_ids}",
-                code="CLIENT_NOT_FOUND",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-    
-    # Create reminder
-    reminder_data = reminder_in.model_dump(exclude={"client_ids"})
-    reminder = ReminderModel(
-        user_id=current_user.id,
-        **reminder_data
+    return reminder_service.create_reminder(
+        db,
+        reminder_in=reminder_in,
+        user_id=current_user.id
     )
-    
-    try:
-        db.add(reminder)
-        db.flush()  # Get the ID without committing
-        
-        # Create client associations
-        for client_id in client_ids:
-            recipient = ReminderRecipient(
-                reminder_id=reminder.id,
-                client_id=client_id
-            )
-            db.add(recipient)
-        
-        db.commit()
-        db.refresh(reminder)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e)) 
-    
-    # Get client IDs for response
-    reminder_recipients = db.query(ReminderRecipient).filter(
-        ReminderRecipient.reminder_id == reminder.id
-    ).all()
-    
-    client_ids = [recipient.client_id for recipient in reminder_recipients]
-    
-    # Create detailed response
-    reminder_detail = ReminderDetail(
-        **reminder.__dict__,
-        clients=client_ids
-    )
-    
-    return reminder_detail
 
 @router.get("/{reminder_id}", response_model=ReminderDetail)
 async def read_reminder(
@@ -131,40 +58,11 @@ async def read_reminder(
     """
     Get a specific reminder by ID with client details.
     """
-    reminder = db.query(ReminderModel).filter(
-        ReminderModel.id == reminder_id,
-        ReminderModel.user_id == current_user.id
-    ).first()
-    
-    if not reminder:
-        raise AppException(
-            message="Reminder not found",
-            code="REMINDER_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Get client IDs
-    reminder_recipients = db.query(ReminderRecipient).filter(
-        ReminderRecipient.reminder_id == reminder.id
-    ).all()
-    
-    client_ids = [recipient.client_id for recipient in reminder_recipients]
-    
-    # Get notification counts (we'll implement this in production)
-    notifications_count = 0
-    sent_count = 0
-    failed_count = 0
-    
-    # Create detailed response
-    reminder_detail = ReminderDetail(
-        **reminder.__dict__,
-        clients=client_ids,
-        notifications_count=notifications_count,
-        sent_count=sent_count,
-        failed_count=failed_count
+    return reminder_service.get_reminder_with_stats(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id
     )
-    
-    return reminder_detail
 
 @router.put("/{reminder_id}", response_model=ReminderDetail)
 async def update_reminder(
@@ -176,95 +74,12 @@ async def update_reminder(
     """
     Update a reminder and its client associations.
     """
-    reminder = db.query(ReminderModel).filter(
-        ReminderModel.id == reminder_id,
-        ReminderModel.user_id == current_user.id
-    ).first()
-    
-    if not reminder:
-        raise AppException(
-            message="Reminder not found",
-            code="REMINDER_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Verify email configuration if being updated and notification type is EMAIL
-    if reminder_in.email_configuration_id is not None and (
-        reminder_in.notification_type == NotificationTypeEnum.EMAIL or 
-        (reminder_in.notification_type is None and reminder.notification_type == NotificationTypeEnum.EMAIL)
-    ):
-        email_config = db.query(EmailConfigurationModel).filter(
-            EmailConfigurationModel.id == reminder_in.email_configuration_id,
-            EmailConfigurationModel.user_id == current_user.id
-        ).first()
-        
-        if not email_config:
-            raise AppException(
-                message="Email configuration not found or not owned by user",
-                code="EMAIL_CONFIG_NOT_FOUND",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
-    
-    # Update reminder fields
-    update_data = reminder_in.model_dump(exclude={"client_ids"}, exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(reminder, field, value)
-    
-    try:
-        # Update client associations if provided
-        if reminder_in.client_ids is not None:
-            # Verify clients exist and belong to user
-            client_ids = reminder_in.client_ids
-            if client_ids:
-                clients = db.query(ClientModel).filter(
-                    ClientModel.id.in_(client_ids),
-                    ClientModel.user_id == current_user.id
-                ).all()
-                
-                found_client_ids = [client.id for client in clients]
-                missing_client_ids = set(client_ids) - set(found_client_ids)
-                
-                if missing_client_ids:
-                    raise AppException(
-                        message=f"Clients not found or not owned by user: {missing_client_ids}",
-                        code="CLIENT_NOT_FOUND",
-                        status_code=status.HTTP_404_NOT_FOUND
-                    )
-            
-            # Delete existing associations
-            db.query(ReminderRecipient).filter(
-                ReminderRecipient.reminder_id == reminder.id
-            ).delete()
-            
-            # Create new associations
-            for client_id in client_ids:
-                recipient = ReminderRecipient(
-                    reminder_id=reminder.id,
-                    client_id=client_id
-                )
-                db.add(recipient)
-        
-        db.add(reminder)
-        db.commit()
-        db.refresh(reminder)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-        
-    # Get updated client IDs
-    reminder_recipients = db.query(ReminderRecipient).filter(
-        ReminderRecipient.reminder_id == reminder.id
-    ).all()
-    
-    client_ids = [recipient.client_id for recipient in reminder_recipients]
-    
-    # Create detailed response
-    reminder_detail = ReminderDetail(
-        **reminder.__dict__,
-        clients=client_ids
+    return reminder_service.update_reminder(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id,
+        reminder_in=reminder_in
     )
-    
-    return reminder_detail
 
 @router.delete("/{reminder_id}")
 async def delete_reminder(
@@ -275,25 +90,11 @@ async def delete_reminder(
     """
     Delete a reminder.
     """
-    reminder = db.query(ReminderModel).filter(
-        ReminderModel.id == reminder_id,
-        ReminderModel.user_id == current_user.id
-    ).first()
-    
-    if not reminder:
-        raise AppException(
-            message="Reminder not found",
-            code="REMINDER_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    try:
-        db.delete(reminder)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
+    reminder_service.delete_reminder(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id
+    )
     return {"detail": "Reminder deleted successfully"}
 
 @router.post("/{reminder_id}/send-now", response_model=dict)
@@ -303,24 +104,15 @@ async def send_reminder_now(
     current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
-    Trigger a reminder to send immediately, regardless of scheduled date.
+    Trigger immediate sending of a reminder.
     """
-    reminder = db.query(ReminderModel).filter(
-        ReminderModel.id == reminder_id,
-        ReminderModel.user_id == current_user.id
-    ).first()
-    
-    if not reminder:
-        raise AppException(
-            message="Reminder not found",
-            code="REMINDER_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # For now, just return a success message
-    # In production, this would call the scheduler service
+    reminder_service.send_reminder_now(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id
+    )
     return {
         "status": "success",
-        "message": f"Reminder '{reminder.title}' queued for immediate delivery",
-        "timestamp": datetime.now().isoformat()
+        "message": "Reminder queued for immediate sending",
+        "reminder_id": reminder_id
     }

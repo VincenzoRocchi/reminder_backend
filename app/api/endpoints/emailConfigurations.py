@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.database import get_db
 from app.models.users import User as UserModel
-from app.models.emailConfigurations import EmailConfiguration as EmailConfigurationModel
 from app.schemas.emailConfigurations import EmailConfiguration, EmailConfigurationCreate, EmailConfigurationUpdate
-from app.core.exceptions import AppException, DatabaseError
+from app.core.exceptions import AppException
+from app.services.emailConfiguration import email_configuration_service
 
 router = APIRouter()
 
@@ -21,10 +21,12 @@ async def read_email_configurations(
     """
     Retrieve all email configurations for the current user.
     """
-    query = db.query(EmailConfigurationModel).filter(EmailConfigurationModel.user_id == current_user.id)
-    
-    email_configurations = query.offset(skip).limit(limit).all()
-    return email_configurations
+    return email_configuration_service.get_user_email_configurations(
+        db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit
+    )
 
 @router.post("/", response_model=EmailConfiguration, status_code=status.HTTP_201_CREATED)
 async def create_email_configuration(
@@ -35,23 +37,11 @@ async def create_email_configuration(
     """
     Create a new email configuration for the current user.
     """
-    # Create the email configuration
-    config_data = config_in.model_dump()
-    
-    email_configuration = EmailConfigurationModel(
-        user_id=current_user.id,
-        **config_data
+    return email_configuration_service.create_email_configuration(
+        db,
+        config_in=config_in,
+        user_id=current_user.id
     )
-    
-    try:
-        db.add(email_configuration)
-        db.commit()
-        db.refresh(email_configuration)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
-    return email_configuration
 
 @router.get("/{config_id}", response_model=EmailConfiguration)
 async def read_email_configuration(
@@ -62,19 +52,11 @@ async def read_email_configuration(
     """
     Get a specific email configuration by ID.
     """
-    config = db.query(EmailConfigurationModel).filter(
-        EmailConfigurationModel.id == config_id,
-        EmailConfigurationModel.user_id == current_user.id
-    ).first()
-    
-    if not config:
-        raise AppException(
-            message="Email configuration not found",
-            code="CONFIG_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    return config
+    return email_configuration_service.get_email_configuration(
+        db,
+        config_id=config_id,
+        user_id=current_user.id
+    )
 
 @router.put("/{config_id}", response_model=EmailConfiguration)
 async def update_email_configuration(
@@ -86,32 +68,12 @@ async def update_email_configuration(
     """
     Update an email configuration.
     """
-    config = db.query(EmailConfigurationModel).filter(
-        EmailConfigurationModel.id == config_id,
-        EmailConfigurationModel.user_id == current_user.id
-    ).first()
-    
-    if not config:
-        raise AppException(
-            message="Email configuration not found",
-            code="CONFIG_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Update fields
-    update_data = config_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(config, field, value)
-    
-    try:
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
-    return config
+    return email_configuration_service.update_email_configuration(
+        db,
+        config_id=config_id,
+        user_id=current_user.id,
+        config_in=config_in
+    )
 
 @router.delete("/{config_id}")
 async def delete_email_configuration(
@@ -122,25 +84,11 @@ async def delete_email_configuration(
     """
     Delete an email configuration.
     """
-    config = db.query(EmailConfigurationModel).filter(
-        EmailConfigurationModel.id == config_id,
-        EmailConfigurationModel.user_id == current_user.id
-    ).first()
-    
-    if not config:
-        raise AppException(
-            message="Email configuration not found",
-            code="CONFIG_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    try:
-        db.delete(config)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise DatabaseError(details=str(e))
-    
+    email_configuration_service.delete_email_configuration(
+        db,
+        config_id=config_id,
+        user_id=current_user.id
+    )
     return {"detail": "Email configuration deleted successfully"}
 
 @router.post("/{config_id}/test", response_model=dict)
@@ -152,20 +100,12 @@ async def test_email_configuration(
     """
     Test if an email configuration is properly configured by attempting to connect to the SMTP server.
     """
-    config = db.query(EmailConfigurationModel).filter(
-        EmailConfigurationModel.id == config_id,
-        EmailConfigurationModel.user_id == current_user.id
-    ).first()
+    config = email_configuration_service.test_email_configuration(
+        db,
+        config_id=config_id,
+        user_id=current_user.id
+    )
     
-    if not config:
-        raise AppException(
-            message="Email configuration not found",
-            code="CONFIG_NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Here you would actually test the SMTP connection
-    # For now, just return a success message
     return {
         "status": "success",
         "message": f"Email configuration '{config.configuration_name}' connected successfully to {config.smtp_host}"
