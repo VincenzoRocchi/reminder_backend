@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 from typing import Optional, List
 from pydantic import Field, SecretStr, field_validator, model_validator, ConfigDict
 import os
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -13,6 +14,8 @@ if Path(env_file).exists():
     load_dotenv(env_file)
 else:
     load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class BaseAppSettings(BaseSettings):
     # ------------------------------
@@ -162,6 +165,82 @@ class BaseAppSettings(BaseSettings):
     )
     
     # ------------------------------
+    # LOAD SECRETS METHOD
+    # ------------------------------
+    def load_secrets(self) -> None:
+        """Load sensitive configuration from encrypted secrets"""
+        try:
+            # Import here to avoid circular imports
+            from app.core.secrets_manager import secrets_manager, SecretsError
+            
+            # Database credentials
+            db_secrets = secrets_manager.get_category('database')
+            if db_secrets:
+                if 'password' in db_secrets:
+                    self.DB_PASSWORD = db_secrets['password']
+                if 'user' in db_secrets:
+                    self.DB_USER = db_secrets['user']
+                if 'host' in db_secrets:
+                    self.DB_HOST = db_secrets['host']
+                if 'port' in db_secrets:
+                    self.DB_PORT = int(db_secrets['port'])
+                if 'name' in db_secrets:
+                    self.DB_NAME = db_secrets['name']
+            
+            # Security credentials
+            security_secrets = secrets_manager.get_category('security')
+            if security_secrets:
+                if 'secret_key' in security_secrets:
+                    self.SECRET_KEY = security_secrets['secret_key']
+            
+            # Email service credentials
+            email_secrets = secrets_manager.get_category('email')
+            if email_secrets:
+                if 'smtp_password' in email_secrets:
+                    self.SMTP_PASSWORD = email_secrets['smtp_password']
+                if 'smtp_user' in email_secrets:
+                    self.SMTP_USER = email_secrets['smtp_user']
+                if 'smtp_host' in email_secrets:
+                    self.SMTP_HOST = email_secrets['smtp_host']
+            
+            # SMS service credentials
+            sms_secrets = secrets_manager.get_category('sms')
+            if sms_secrets:
+                if 'twilio_auth_token' in sms_secrets:
+                    self.TWILIO_AUTH_TOKEN = sms_secrets['twilio_auth_token']
+                if 'twilio_account_sid' in sms_secrets:
+                    self.TWILIO_ACCOUNT_SID = sms_secrets['twilio_account_sid']
+            
+            # WhatsApp service credentials
+            whatsapp_secrets = secrets_manager.get_category('whatsapp')
+            if whatsapp_secrets:
+                if 'api_key' in whatsapp_secrets:
+                    self.WHATSAPP_API_KEY = whatsapp_secrets['api_key']
+                if 'api_url' in whatsapp_secrets:
+                    self.WHATSAPP_API_URL = whatsapp_secrets['api_url']
+            
+            # Payment service credentials
+            payment_secrets = secrets_manager.get_category('payment')
+            if payment_secrets:
+                if 'stripe_api_key' in payment_secrets:
+                    self.STRIPE_API_KEY = payment_secrets['stripe_api_key']
+                if 'stripe_webhook_secret' in payment_secrets:
+                    self.STRIPE_WEBHOOK_SECRET = payment_secrets['stripe_webhook_secret']
+            
+            # S3 credentials
+            s3_secrets = secrets_manager.get_category('s3')
+            if s3_secrets:
+                if 'access_key' in s3_secrets and s3_secrets['access_key']:
+                    self.S3_ACCESS_KEY = s3_secrets['access_key']
+                if 'secret_key' in s3_secrets and s3_secrets['secret_key']:
+                    self.S3_SECRET_KEY = s3_secrets['secret_key']
+                    
+        except Exception as e:
+            # Log the error but continue with environment variables
+            logger.warning(f"Failed to load secrets: {str(e)}")
+            logger.warning("Falling back to environment variables")
+    
+    # ------------------------------
     # VALIDATORI
     # ------------------------------
     @field_validator("STORAGE_TYPE")
@@ -214,6 +293,11 @@ class BaseAppSettings(BaseSettings):
                 raise ValueError(f"Missing required S3 configuration for storage type 's3': {', '.join(missing)}")
             if self.S3_BUCKET_NAME and (".." in self.S3_BUCKET_NAME or self.S3_BUCKET_NAME.startswith("-")):
                 raise ValueError("Invalid S3 bucket name format")
+        return self
+        
+    @model_validator(mode='after')
+    def load_encrypted_secrets(self) -> 'BaseAppSettings':
+        self.load_secrets()
         return self
 
     @property

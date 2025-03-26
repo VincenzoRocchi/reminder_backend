@@ -1,3 +1,4 @@
+# app/services/sms_service.py
 import logging
 from twilio.rest import Client
 from typing import Optional
@@ -31,13 +32,25 @@ class SMSService:
             True if SMS was sent successfully, False otherwise
         """
         try:
+            # Import secrets manager here to avoid circular imports
+            from app.core.secrets_manager import secrets_manager
+            
             # Check if service account has Twilio configured
-            if not service_account.twilio_account_sid or not service_account.twilio_auth_token or not service_account.twilio_phone_number:
-                logger.warning(f"Service account {service_account.id} has no Twilio settings configured, falling back to global settings")
-                # Fall back to global settings if service account settings not available
-                account_sid = settings.TWILIO_ACCOUNT_SID
-                auth_token = settings.TWILIO_AUTH_TOKEN
-                phone_number = settings.TWILIO_PHONE_NUMBER
+            if not service_account.twilio_account_sid or not service_account.twilio_auth_token:
+                logger.warning(f"Service account {service_account.id} has incomplete Twilio settings, checking secrets")
+                
+                # Try to get secrets first
+                try:
+                    sms_secrets = secrets_manager.get_category("sms")
+                    account_sid = service_account.twilio_account_sid or sms_secrets.get("twilio_account_sid") or settings.TWILIO_ACCOUNT_SID
+                    auth_token = service_account.twilio_auth_token or sms_secrets.get("twilio_auth_token") or settings.TWILIO_AUTH_TOKEN
+                    phone_number = service_account.twilio_phone_number or sms_secrets.get("twilio_phone_number") or settings.TWILIO_PHONE_NUMBER
+                except Exception as e:
+                    # Fall back to settings if secrets fail
+                    logger.warning(f"Error accessing SMS secrets: {str(e)}")
+                    account_sid = service_account.twilio_account_sid or settings.TWILIO_ACCOUNT_SID
+                    auth_token = service_account.twilio_auth_token or settings.TWILIO_AUTH_TOKEN
+                    phone_number = service_account.twilio_phone_number or settings.TWILIO_PHONE_NUMBER
             else:
                 # Use service account specific settings
                 account_sid = service_account.twilio_account_sid

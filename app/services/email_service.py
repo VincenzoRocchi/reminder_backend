@@ -1,3 +1,4 @@
+# app/services/email_service.py
 import logging
 import aiosmtplib
 from email.mime.multipart import MIMEMultipart
@@ -37,15 +38,29 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         try:
+            # Import secrets manager here to avoid circular imports
+            from app.core.secrets_manager import secrets_manager
+            
             # Check if service account has SMTP configured
             if not service_account.smtp_host or not service_account.smtp_user or not service_account.smtp_password:
-                logger.warning(f"Service account {service_account.id} has no SMTP settings configured, falling back to global settings")
-                # Fall back to global settings if service account settings not available
-                smtp_host = settings.SMTP_HOST
-                smtp_port = settings.SMTP_PORT
-                smtp_user = settings.SMTP_USER
-                smtp_password = settings.SMTP_PASSWORD
-                email_from = settings.EMAIL_FROM
+                logger.warning(f"Service account {service_account.id} has incomplete SMTP settings, checking secrets")
+                
+                # Try to get from secrets first
+                try:
+                    email_secrets = secrets_manager.get_category("email")
+                    smtp_host = service_account.smtp_host or email_secrets.get("smtp_host") or settings.SMTP_HOST
+                    smtp_port = service_account.smtp_port or email_secrets.get("smtp_port", 0) or settings.SMTP_PORT
+                    smtp_user = service_account.smtp_user or email_secrets.get("smtp_user") or settings.SMTP_USER
+                    smtp_password = service_account.smtp_password or email_secrets.get("smtp_password") or settings.SMTP_PASSWORD
+                    email_from = service_account.email_from or email_secrets.get("email_from") or settings.EMAIL_FROM
+                except Exception as e:
+                    # Fall back to settings if secrets fail
+                    logger.warning(f"Error accessing email secrets: {str(e)}")
+                    smtp_host = service_account.smtp_host or settings.SMTP_HOST
+                    smtp_port = service_account.smtp_port or settings.SMTP_PORT
+                    smtp_user = service_account.smtp_user or settings.SMTP_USER
+                    smtp_password = service_account.smtp_password or settings.SMTP_PASSWORD
+                    email_from = service_account.email_from or settings.EMAIL_FROM
             else:
                 # Use service account specific settings
                 smtp_host = service_account.smtp_host

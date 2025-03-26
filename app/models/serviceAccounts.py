@@ -1,3 +1,4 @@
+# app/models/serviceAccounts.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -56,8 +57,16 @@ class ServiceAccount(Base):
     # SMTP Password management
     @property
     def smtp_password(self) -> Optional[str]:
-        """Get decrypted SMTP password"""
+        """Get decrypted SMTP password or try secrets"""
         if not self._smtp_password:
+            # Try to get from secrets
+            try:
+                from app.core.secrets_manager import secrets_manager
+                email_secrets = secrets_manager.get_category("email")
+                if email_secrets and "smtp_password" in email_secrets:
+                    return email_secrets["smtp_password"]
+            except Exception:
+                pass
             return None
         
         try:
@@ -96,8 +105,16 @@ class ServiceAccount(Base):
     # Twilio Auth Token management
     @property
     def twilio_auth_token(self) -> Optional[str]:
-        """Get decrypted Twilio auth token"""
+        """Get decrypted Twilio auth token or try secrets"""
         if not self._twilio_auth_token:
+            # Try to get from secrets
+            try:
+                from app.core.secrets_manager import secrets_manager
+                sms_secrets = secrets_manager.get_category("sms")
+                if sms_secrets and "twilio_auth_token" in sms_secrets:
+                    return sms_secrets["twilio_auth_token"]
+            except Exception:
+                pass
             return None
         
         try:
@@ -142,8 +159,16 @@ class ServiceAccount(Base):
     # WhatsApp API Key management
     @property
     def whatsapp_api_key(self) -> Optional[str]:
-        """Get decrypted WhatsApp API key"""
+        """Get decrypted WhatsApp API key or try secrets"""
         if not self._whatsapp_api_key:
+            # Try to get from secrets
+            try:
+                from app.core.secrets_manager import secrets_manager
+                whatsapp_secrets = secrets_manager.get_category("whatsapp")
+                if whatsapp_secrets and "api_key" in whatsapp_secrets:
+                    return whatsapp_secrets["api_key"]
+            except Exception:
+                pass
             return None
         
         try:

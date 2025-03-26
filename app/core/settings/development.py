@@ -4,6 +4,9 @@ import secrets
 from .base import BaseAppSettings
 from pydantic import field_validator, Field, computed_field
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DevelopmentSettings(BaseAppSettings):
     # Class variable to store the generated key
@@ -12,12 +15,21 @@ class DevelopmentSettings(BaseAppSettings):
     # Use computed_field to provide a development-specific secret key
     @computed_field
     def DEV_SECRET_KEY(self) -> str:
-        # Use the environment variable if set
+        # First try from environment variable
         env_key = os.getenv("DEV_SECRET_KEY")
         if env_key:
             return env_key
-            
-        # Otherwise use a generated key that persists for the app's lifetime
+        
+        # Next try from secrets
+        try:
+            from app.core.secrets_manager import secrets_manager
+            security_secrets = secrets_manager.get_category("security")
+            if security_secrets and "dev_secret_key" in security_secrets:
+                return security_secrets["dev_secret_key"]
+        except Exception as e:
+            logger.debug(f"Could not load DEV_SECRET_KEY from secrets: {e}")
+        
+        # Finally, generate a key if needed
         if DevelopmentSettings._dev_secret_key is None:
             DevelopmentSettings._dev_secret_key = secrets.token_urlsafe(32)
             print("WARNING: Using a generated DEV_SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
