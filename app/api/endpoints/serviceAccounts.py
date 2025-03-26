@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.users import User as UserModel
 from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel, ServiceTypeEnum
 from app.schemas.serviceAccounts import ServiceAccount, ServiceAccountCreate, ServiceAccountUpdate, ServiceType
-from app.core.exceptions import AppException, InsufficientPermissionsError
+from app.core.exceptions import AppException, InsufficientPermissionsError, DatabaseError
 
 router = APIRouter()
 
@@ -75,11 +75,7 @@ async def create_service_account(
         db.refresh(service_account)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return service_account
 
@@ -150,11 +146,7 @@ async def update_service_account(
         db.refresh(service_account)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e)) 
     
     return service_account
 
@@ -186,11 +178,7 @@ async def delete_service_account(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return {"detail": "Service account deleted successfully"}
 

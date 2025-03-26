@@ -7,11 +7,7 @@ from app.core.security import get_password_hash
 from app.database import get_db
 from app.models.users import User as UserModel
 from app.schemas.user import User, UserCreate, UserUpdate, UserWithRelations
-from app.core.exceptions import (
-    AppException, 
-    InsufficientPermissionsError, 
-    SecurityException
-)
+from app.core.exceptions import AppException,InsufficientPermissionsError, SecurityException, DatabaseError
 
 router = APIRouter()
 
@@ -80,12 +76,8 @@ async def create_user(
         db.refresh(user)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
+        raise DatabaseError(details=str(e))
+        
     return user
 
 @router.get("/me", response_model=User)
@@ -177,11 +169,7 @@ async def update_user(
         db.refresh(user)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return user
 
@@ -207,11 +195,7 @@ async def delete_user(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return {"detail": "User deleted successfully"}
 
@@ -245,10 +229,6 @@ async def register_user(
         db.refresh(user)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return user

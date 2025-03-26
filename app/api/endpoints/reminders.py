@@ -11,7 +11,7 @@ from app.models.serviceAccounts import ServiceAccount as ServiceAccountModel
 from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient
 from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
-from app.core.exceptions import AppException
+from app.core.exceptions import AppException, DatabaseError
 
 router = APIRouter()
 
@@ -113,11 +113,7 @@ async def create_reminder(
         db.refresh(reminder)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e)) 
     
     # Get client IDs for response
     reminder_recipients = db.query(ReminderRecipient).filter(
@@ -267,12 +263,8 @@ async def update_reminder(
         db.refresh(reminder)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
+        raise DatabaseError(details=str(e))
+        
     # Get updated client IDs
     reminder_recipients = db.query(ReminderRecipient).filter(
         ReminderRecipient.reminder_id == reminder.id
@@ -314,11 +306,7 @@ async def delete_reminder(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return {"detail": "Reminder deleted successfully"}
 

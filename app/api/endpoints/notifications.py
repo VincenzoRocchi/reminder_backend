@@ -8,7 +8,7 @@ from app.models.users import User as UserModel
 from app.models.reminders import Reminder as ReminderModel
 from app.models.notifications import Notification as NotificationModel, NotificationStatusEnum
 from app.schemas.notifications import Notification, NotificationUpdate, NotificationDetail
-from app.core.exceptions import AppException
+from app.core.exceptions import AppException, DatabaseError
 
 router = APIRouter()
 
@@ -133,11 +133,7 @@ async def update_notification(
         db.refresh(notification)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return notification
 
@@ -184,12 +180,8 @@ async def resend_notification(
         db.refresh(notification)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
+        raise DatabaseError(details=str(e))
+        
     # In production, this would trigger the scheduler to pick up the notification
     return {
         "status": "success",

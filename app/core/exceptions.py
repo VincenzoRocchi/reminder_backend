@@ -76,3 +76,16 @@ class InsufficientPermissionsError(SecurityException):
             message=message,
             code="INSUFFICIENT_PERMISSIONS"
         )
+        
+class DatabaseError(AppException):
+    """Exception for database operation failures"""
+    def __init__(self, message: str = "Database operation failed", details: str = None):
+        error_message = message
+        if details:
+            error_message += f": {details}"
+            
+        super().__init__(
+            message=error_message,
+            code="DATABASE_ERROR",
+            status_code=500
+        )

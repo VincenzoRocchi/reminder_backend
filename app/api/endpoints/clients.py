@@ -9,7 +9,7 @@ from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient
 from app.models.reminders import Reminder
 from app.schemas.clients import Client, ClientCreate, ClientUpdate, ClientDetail
-from app.core.exceptions import AppException
+from app.core.exceptions import DatabaseError
 
 router = APIRouter()
 
@@ -58,11 +58,7 @@ async def create_client(
         db.refresh(client)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return client
 
@@ -148,11 +144,7 @@ async def update_client(
         db.refresh(client)
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        raise DatabaseError(details=str(e))
     
     return client
 
@@ -181,12 +173,8 @@ async def delete_client(
         db.commit()
     except Exception as e:
         db.rollback()
-        raise AppException(
-            message=f"Database error: {str(e)}",
-            code="DATABASE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
+        raise DatabaseError(details=str(e))
+        
     return {"detail": "Client deleted successfully"}
 
 @router.post("/bulk-import", response_model=dict)
@@ -222,12 +210,8 @@ async def bulk_import_clients(
             db.commit()
         except Exception as e:
             db.rollback()
-            raise AppException(
-                message=f"Error during commit: {str(e)}",
-                code="DATABASE_ERROR",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
+            raise DatabaseError(details=str(e))
+            
     return {
         "imported_count": imported_count,
         "failed_count": len(failed_imports),
