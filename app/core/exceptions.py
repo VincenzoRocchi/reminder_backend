@@ -89,3 +89,29 @@ class DatabaseError(AppException):
             code="DATABASE_ERROR",
             status_code=500
         )
+        
+class ServiceError(AppException):
+    """Exception for external service operations failure"""
+    def __init__(self, service: str, message: str, details: str = None):
+        error_message = f"{service} service error: {message}"
+        if details:
+            error_message += f" - {details}"
+            
+        super().__init__(
+            message=error_message,
+            code=f"{service.upper()}_SERVICE_ERROR",
+            status_code=500
+        )
+        
+class ValidationError(AppException):
+    """Exception for data validation failures"""
+    def __init__(self, field: str = None, message: str = "Validation failed"):
+        error_message = message
+        if field:
+            error_message = f"Validation failed for {field}: {message}"
+            
+        super().__init__(
+            message=error_message,
+            code="VALIDATION_ERROR",
+            status_code=422
+        )

@@ -9,7 +9,7 @@ from app.models.clients import Client as ClientModel
 from app.models.reminderRecipient import ReminderRecipient
 from app.models.reminders import Reminder
 from app.schemas.clients import Client, ClientCreate, ClientUpdate, ClientDetail
-from app.core.exceptions import DatabaseError
+from app.core.exceptions import DatabaseError, AppException
 
 router = APIRouter()
 
