@@ -19,3 +19,8 @@ secrets/
 
 # Virtual environments
 .venv
+
+# Environment files
+.env.development
+.env.testing
+.env.production
