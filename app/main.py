@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import logging
@@ -8,25 +7,15 @@ import logging
 from app.core.settings import settings
 from app.api.routes import api_router
 from app.database import engine, Base
+from app.core.logging_setup import setup_logging
+from app.core.exception_handlers import register_exception_handlers
+from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
 
-# Configure logger
+# Set up logging first
+setup_logging()
+
+# Configure module logger
 logger = logging.getLogger(__name__)
-
-# Create custom middleware for security headers
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        # Add security headers to every response
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        
-        # Only add HSTS header in production to avoid issues during development
-        if settings.ENV == "production":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-            response.headers["Content-Security-Policy"] = "default-src 'self'"
-        
-        return response
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -35,6 +24,9 @@ app = FastAPI(
     docs_url=settings.DOCS_URL,
     redoc_url=settings.REDOC_URL
 )
+
+# Register exception handlers
+register_exception_handlers(app)
 
 # Add production-only security middleware
 if settings.ENV == "production":
@@ -49,7 +41,10 @@ if settings.ENV == "production":
             allowed_hosts=allowed_hosts
         )
 
-# Add security headers middleware for all environments
+# Add request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
+# Add security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Set up CORS middleware with values from settings
@@ -74,6 +69,13 @@ def root():
     Root endpoint to check if the API is running
     """
     return {"message": "Welcome to the Reminder App API!"}
+
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring systems
+    """
+    return {"status": "healthy", "environment": settings.ENV}
 
 # Register startup event to initialize services
 @app.on_event("startup")
