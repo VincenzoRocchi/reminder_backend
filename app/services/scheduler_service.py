@@ -19,6 +19,7 @@ from app.models.clients import Client
 from app.models.reminderRecipient import ReminderRecipient
 from app.core.exceptions import ServiceError
 from app.core.settings import settings
+from app.services.notification import notification_service
 
 # Configure module-level logger for this service
 logger = logging.getLogger(__name__)
@@ -78,6 +79,13 @@ class SchedulerService:
     async def process_reminders(self):
         """
         Process reminders that are due to be sent.
+        
+        This method:
+        1. Finds all reminders that are due and active
+        2. For each reminder, ensures notification records exist for all recipients
+        3. Processes and sends each notification
+        4. Updates reminder and notification statuses
+        5. Handles recurring reminders
         """
         logger.info("Processing due reminders")
         
@@ -95,6 +103,8 @@ class SchedulerService:
                 .all()
             )
             
+            logger.info(f"Found {len(due_reminders)} due reminders to process")
+            
             for reminder in due_reminders:
                 # Get the user who created the reminder
                 user = db.query(User).filter(User.id == reminder.user_id).first()
@@ -102,110 +112,44 @@ class SchedulerService:
                     logger.warning(f"Skipping reminder {reminder.id}: User {reminder.user_id} not found or inactive")
                     continue
                 
-                # For email reminders, ensure we have a valid email configuration
-                email_configuration = None
-                if reminder.notification_type == NotificationTypeEnum.EMAIL:
-                    if reminder.email_configuration_id:
-                        email_configuration = db.query(EmailConfiguration).filter(
-                            EmailConfiguration.id == reminder.email_configuration_id,
-                            EmailConfiguration.user_id == user.id,
-                            EmailConfiguration.is_active == True
-                        ).first()
-                    
-                    if not email_configuration:
-                        logger.warning(f"Skipping reminder {reminder.id}: No active email configuration found")
-                        continue
-                
-                # Get sender identity if specified
-                sender_identity = None
-                if reminder.sender_identity_id:
-                    sender_identity = db.query(SenderIdentity).filter(
-                        SenderIdentity.id == reminder.sender_identity_id,
-                        SenderIdentity.user_id == user.id
-                    ).first()
-                    
-                    if not sender_identity:
-                        logger.warning(f"Reminder {reminder.id} specified sender_identity_id {reminder.sender_identity_id} which was not found")
-                
-                # Get all clients for this reminder
-                recipient_mappings = (
-                    db.query(ReminderRecipient)
-                    .filter(ReminderRecipient.reminder_id == reminder.id)
-                    .all()
-                )
-                
-                client_ids = [mapping.client_id for mapping in recipient_mappings]
-                clients = db.query(Client).filter(Client.id.in_(client_ids), Client.is_active == True).all()
-                
-                # Process each client
-                for client in clients:
-                    # Check if a notification already exists
-                    existing_notification = (
-                        db.query(Notification)
-                        .filter(
-                            Notification.reminder_id == reminder.id,
-                            Notification.client_id == client.id,
-                            Notification.status.in_([NotificationStatusEnum.PENDING, NotificationStatusEnum.SENT])
-                        )
-                        .first()
+                try:
+                    # Generate notifications for this reminder
+                    # This ensures that we have a notification record for each client
+                    notifications = notification_service.generate_notifications_for_reminder(
+                        db,
+                        reminder_id=reminder.id,
+                        user_id=reminder.user_id
                     )
                     
-                    # Skip if already processed
-                    if existing_notification and existing_notification.status == NotificationStatusEnum.SENT:
+                    if not notifications:
+                        logger.warning(f"No notifications generated for reminder {reminder.id}: No active clients found")
                         continue
+                        
+                    logger.info(f"Generated {len(notifications)} notifications for reminder {reminder.id}")
                     
-                    # Create a new notification if one doesn't exist
-                    if not existing_notification:
-                        notification = Notification(
-                            user_id=reminder.user_id,
-                            reminder_id=reminder.id,
-                            client_id=client.id,
-                            notification_type=reminder.notification_type,
-                            message=reminder.description,
-                            status=NotificationStatusEnum.PENDING
-                        )
-                        db.add(notification)
-                        db.commit()
-                        db.refresh(notification)
-                    else:
-                        notification = existing_notification
-                    
-                    # Send the notification
-                    success = await self.send_notification(
-                        notification_type=reminder.notification_type,
-                        email_configuration=email_configuration,  # Only used for email
-                        sender_identity=sender_identity,
-                        user=user,
-                        client=client,
+                    # Process the reminder notifications
+                    await notification_service.create_and_send_notifications_for_reminder(
+                        db, 
                         reminder=reminder
                     )
                     
-                    # Update notification status
-                    notification.sent_at = datetime.now()
-                    if success:
-                        notification.status = NotificationStatusEnum.SENT
-                    else:
-                        notification.status = NotificationStatusEnum.FAILED
-                        notification.error_message = "Failed to send notification"
-                    
-                    db.add(notification)
-                
-                # Handle recurring reminders
-                if reminder.is_recurring and reminder.recurrence_pattern:
-                    next_date = self.calculate_next_reminder_date(
-                        reminder.reminder_date, reminder.recurrence_pattern
-                    )
-                    if next_date:
-                        reminder.reminder_date = next_date
-                    else:
-                        reminder.is_active = False
-                else:
-                    reminder.is_active = False
-                
-                db.add(reminder)
-                
-            db.commit()
-            
+                    # Handle recurring reminders
+                    if reminder.is_recurring and reminder.recurrence_pattern:
+                        next_date = self.calculate_next_reminder_date(
+                            reminder.reminder_date, reminder.recurrence_pattern
+                        )
+                        if next_date:
+                            reminder.reminder_date = next_date
+                            db.add(reminder)
+                            db.commit()
+                            logger.info(f"Updated recurring reminder {reminder.id} with next date: {next_date}")
+                        else:
+                            logger.warning(f"Could not calculate next date for recurring reminder {reminder.id}")
+                            
+                except Exception as e:
+                    logger.error(f"Error processing reminder {reminder.id}: {str(e)}", exc_info=True)
+                    continue
+                        
         except Exception as e:
             logger.error(f"Error processing reminders: {str(e)}", exc_info=True)
         finally:

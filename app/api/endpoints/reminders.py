@@ -9,6 +9,7 @@ from app.models.reminders import NotificationTypeEnum
 from app.schemas.reminders import ReminderSchema, ReminderCreate, ReminderUpdate, ReminderDetail
 from app.core.exceptions import AppException
 from app.services.reminder import reminder_service
+from app.services.notification import notification_service
 
 router = APIRouter()
 
@@ -115,16 +116,31 @@ async def send_reminder_now(
 ):
     """
     Trigger immediate sending of a reminder.
+    
+    This endpoint:
+    1. Creates notification records for each client associated with the reminder
+    2. Attempts to send each notification immediately
+    3. Updates notification statuses based on success/failure
     """
+    # First generate notifications for all clients associated with this reminder
+    notifications = notification_service.generate_notifications_for_reminder(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id
+    )
+    
+    # Then trigger the service to send the notifications
     reminder_service.send_reminder_now(
         db,
         reminder_id=reminder_id,
         user_id=current_user.id
     )
+    
     return {
         "status": "success",
-        "message": "Reminder queued for immediate sending",
-        "reminder_id": reminder_id
+        "message": f"Reminder queued for immediate sending to {len(notifications)} recipients",
+        "reminder_id": reminder_id,
+        "notification_count": len(notifications)
     }
 
 @router.post("/{reminder_id}/clients", response_model=ReminderDetail)

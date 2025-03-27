@@ -14,6 +14,10 @@ class NotificationCreate(NotificationBase):
     """Schema for creating a notification"""
     pass
 
+class NotificationCreateDB(NotificationBase):
+    """Schema for creating a notification in the database (with user_id)"""
+    user_id: int
+
 class NotificationUpdate(BaseModel):
     """Schema for updating a notification"""
     status: Optional[ReminderStatus] = None
@@ -23,6 +27,7 @@ class NotificationUpdate(BaseModel):
 class NotificationInDBBase(NotificationBase):
     """Base schema for a notification in database"""
     id: int
+    user_id: int
     sent_at: Optional[datetime] = None
     error_message: Optional[str] = None
     created_at: datetime

@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.repositories.reminder import reminder_repository
 from app.repositories.client import client_repository
+from app.models.reminders import Reminder
 from app.schemas.reminders import (
     ReminderCreate, 
     ReminderUpdate, 
@@ -28,7 +29,7 @@ class ReminderService:
         self.repository = reminder_repository
         self.client_repository = client_repository
     
-    def get_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> ReminderSchema:
+    def get_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
         """
         Get a reminder by ID.
         
@@ -57,7 +58,7 @@ class ReminderService:
         limit: int = 100,
         active_only: bool = False,
         sender_identity_id: Optional[int] = None
-    ) -> List[ReminderSchema]:
+    ) -> List[Reminder]:
         """
         Get all reminders for a user.
         
@@ -73,15 +74,15 @@ class ReminderService:
             List[Reminder]: List of reminders
         """
         # Start with base query
-        query = db.query(ReminderSchema).filter(ReminderSchema.user_id == user_id)
+        query = db.query(Reminder).filter(Reminder.user_id == user_id)
         
         # Add active only filter if requested
         if active_only:
-            query = query.filter(ReminderSchema.is_active == True)
+            query = query.filter(Reminder.is_active == True)
             
         # Add sender identity filter if provided
         if sender_identity_id is not None:
-            query = query.filter(ReminderSchema.sender_identity_id == sender_identity_id)
+            query = query.filter(Reminder.sender_identity_id == sender_identity_id)
             
         # Return paginated results
         return query.offset(skip).limit(limit).all()
@@ -93,7 +94,7 @@ class ReminderService:
         user_id: int,
         limit: int = 100,
         active_only: bool = True
-    ) -> List[ReminderSchema]:
+    ) -> List[Reminder]:
         """
         Get upcoming reminders for a user.
         
@@ -119,7 +120,7 @@ class ReminderService:
         *, 
         user_id: int,
         active_only: bool = True
-    ) -> List[ReminderSchema]:
+    ) -> List[Reminder]:
         """
         Get recurring reminders for a user.
         
@@ -288,7 +289,7 @@ class ReminderService:
         *, 
         reminder_in: ReminderCreate,
         user_id: int
-    ) -> ReminderSchema:
+    ) -> ReminderDetail:
         """
         Create a new reminder.
         
@@ -298,7 +299,7 @@ class ReminderService:
             user_id: User ID
             
         Returns:
-            Reminder: Created reminder
+            ReminderDetail: Created reminder with details
             
         Raises:
             ClientNotFoundError: If any client not found
@@ -352,7 +353,7 @@ class ReminderService:
         reminder_id: int,
         user_id: int,
         reminder_in: ReminderUpdate | Dict[str, Any]
-    ) -> ReminderSchema:
+    ) -> ReminderDetail:
         """
         Update a reminder.
         
@@ -363,7 +364,7 @@ class ReminderService:
             reminder_in: Update data
             
         Returns:
-            Reminder: Updated reminder
+            ReminderDetail: Updated reminder with details
             
         Raises:
             ReminderNotFoundError: If reminder not found
@@ -426,7 +427,7 @@ class ReminderService:
         # Return reminder with stats (including clients)
         return self.get_reminder_with_stats(db, reminder_id=reminder_id, user_id=user_id)
     
-    def delete_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> ReminderSchema:
+    def delete_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
         """
         Delete a reminder.
         
@@ -491,7 +492,7 @@ class ReminderService:
         start_date: datetime,
         end_date: datetime,
         active_only: bool = True
-    ) -> List[ReminderSchema]:
+    ) -> List[Reminder]:
         """
         Get reminders within a date range for a user.
         
