@@ -16,7 +16,7 @@ This document outlines the database architecture, ORM configuration, and best pr
 
 The Reminder App uses a layered database architecture:
 
-```
+```ascii
 ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
 │   API Layer    │────▶│ Service Layer  │────▶│ Repository Layer│
 └────────────────┘     └────────────────┘     └────────────────┘

@@ -1,9 +1,11 @@
 # AWS Secrets Manager Integration Guide
 
 ## About This Guide
+
 This guide provides instructions for setting up AWS Secrets Manager to handle sensitive credentials in production environments. Currently, the application uses environment variables, but AWS Secrets Manager should be considered for production deployments to enhance security.
 
 ## Why Use AWS Secrets Manager?
+
 - **Centralized Credential Management**: All sensitive information in one secure place
 - **Automatic Rotation**: Credentials can be automatically rotated without downtime
 - **Fine-grained Access Control**: IAM policies control who can access which secrets
@@ -16,9 +18,11 @@ This guide provides instructions for setting up AWS Secrets Manager to handle se
 ### 1. AWS Setup
 
 #### Create AWS Account
+
 If you don't have an AWS account, create one at [aws.amazon.com](https://aws.amazon.com/).
 
 #### Install AWS CLI
+
 ```bash
 # Install AWS CLI
 pip install awscli
@@ -28,6 +32,7 @@ aws configure
 ```
 
 #### Create Secrets
+
 ```bash
 # Create a secret for production environment
 aws secretsmanager create-secret \
@@ -42,8 +47,10 @@ aws secretsmanager create-secret \
 ```
 
 #### Set Up IAM Roles and Permissions
+
 1. Create an IAM role for your application
 2. Attach a policy with the following permissions:
+
    ```json
    {
        "Version": "2012-10-17",
@@ -62,11 +69,13 @@ aws secretsmanager create-secret \
 ### 2. Application Integration
 
 #### Install Required Packages
+
 ```bash
 pip install boto3
 ```
 
 #### Create AWS Secrets Manager Adapter
+
 Create a new file `app/core/aws_secrets_manager.py`:
 
 ```python
@@ -134,6 +143,7 @@ class AWSSecretsManager:
 ```
 
 #### Update Settings to Use AWS Secrets Manager
+
 Modify your settings initialization code to use AWS Secrets Manager in production:
 
 ```python
@@ -198,4 +208,4 @@ For detailed information, refer to [AWS documentation on secret rotation](https:
 
 - [AWS Secrets Manager Documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html)
 - [Boto3 Secrets Manager Documentation](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/secretsmanager.html)
-- [AWS IAM Documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) 
+- [AWS IAM Documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html)

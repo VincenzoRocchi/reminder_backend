@@ -5,12 +5,14 @@ This document outlines security best practices for managing credentials and envi
 ## Environment Variables Checklist
 
 ### General Guidelines
+
 - [ ] Never commit `.env.*` files to source control (they should be in `.gitignore`)
 - [ ] Use different `.env.*` files for each environment (development, testing, production)
 - [ ] Keep backups of production environment variables in a secure location
 - [ ] For production deployments, consider using a cloud secrets management service (AWS Secrets Manager, HashiCorp Vault, etc.)
 
 ### Critical Security Keys
+
 - [ ] `SECRET_KEY`: Must be at least 32 characters, randomly generated for production
 - [ ] `TWILIO_AUTH_TOKEN`: Must be stored securely and never committed to source code
 - [ ] `DB_PASSWORD`: Use strong unique passwords for each environment
@@ -18,6 +20,7 @@ This document outlines security best practices for managing credentials and envi
 ## Environment-Specific Requirements
 
 ### Production Environment
+
 - [ ] Database connection must use SSL (`ssl=true` in connection string)
 - [ ] `SECRET_KEY` must be at least 32 characters long
 - [ ] `USE_REDIS` should be enabled for token blacklisting
@@ -28,12 +31,14 @@ This document outlines security best practices for managing credentials and envi
 - [ ] For cloud deployments, use platform-provided secrets management services
 
 ### Testing Environment
+
 - [ ] Can use SQLite for simplified testing
 - [ ] Secure services can be mocked or disabled
 - [ ] Redis can be disabled
 - [ ] Should not use any production credentials
 
 ### Development Environment
+
 - [ ] Should use separate databases from production
 - [ ] Can relax some validation rules for convenience
 - [ ] Should still use reasonably secure credentials
@@ -41,6 +46,7 @@ This document outlines security best practices for managing credentials and envi
 ## Credentials Management
 
 ### Managing Sensitive Credentials
+
 Follow these best practices for handling sensitive credentials:
 
 1. Store all sensitive credentials in environment variables
@@ -54,6 +60,7 @@ Follow these best practices for handling sensitive credentials:
 6. Periodically rotate all credentials
 
 ### Managing Twilio Credentials
+
 Twilio is used for both SMS and WhatsApp notifications through a unified TwilioService. Secure its credentials:
 
 1. Create a dedicated Twilio subaccount for each environment
@@ -68,6 +75,7 @@ Important: Phone numbers used for sending SMS and WhatsApp messages are stored i
 user to have their own set of verified sender phone numbers.
 
 ### Sensitive Data Handling
+
 - [ ] User passwords are hashed with bcrypt/Argon2
 - [ ] Phone numbers and emails are encrypted at rest
 - [ ] Personal information is validated before storage
@@ -83,6 +91,7 @@ python -m app.core.security_checker
 ```
 
 These checks will:
+
 1. Validate environment files for security issues
 2. Check service credentials
 3. Ensure production-specific validations are enforced
@@ -131,4 +140,4 @@ security-check:
 | RATE_LIMIT | High | Disabled | Enforced |
 
 Note: Twilio phone numbers are NOT stored in environment variables. They are stored in the `SenderIdentity` model for each user.
-Note: Email/SMTP configuration is NOT stored in environment variables. It is stored in the `EmailConfiguration` model for each user. 
+Note: Email/SMTP configuration is NOT stored in environment variables. It is stored in the `EmailConfiguration` model for each user.
