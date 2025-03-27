@@ -98,27 +98,30 @@ class ProductionSettings(BaseAppSettings):
             raise ValueError(error_msg)
         return v
     
-    # Token expiration validation for production (stricter settings)
-    @field_validator('ACCESS_TOKEN_EXPIRE_MINUTES')
-    def validate_access_token_expiration(cls, v):
-        if v < 15:  # Minimum 15 minutes for access tokens in production
-            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be at least 15 minutes in production")
-        if v > 45:  # Maximum 45 minutes for access tokens in production
-            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES should not exceed 45 minutes in production")
-        return v
     
-    @field_validator('REFRESH_TOKEN_EXPIRE_DAYS')
-    def validate_refresh_token_expiration(cls, v):
-        if v < 7:  # Minimum 7 days for refresh tokens in production
-            raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS must be at least 7 days in production")
-        if v > 30:  # Maximum 30 days for refresh tokens in production
-            raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS should not exceed 30 days in production")
-        return v
+    # TODO: Add extra validators for production (token expiration) 
     
-    @field_validator('PASSWORD_RESET_TOKEN_EXPIRE_MINUTES')
-    def validate_password_reset_expiration(cls, v):
-        if v < 15:  # Minimum 15 minutes for password reset in production
-            raise ValueError("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES must be at least 15 minutes in production")
-        if v > 30:  # Maximum 30 minutes for password reset in production
-            raise ValueError("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES should not exceed 30 minutes in production")
-        return v
+    # # Token expiration validation for production (stricter settings)
+    # @field_validator('ACCESS_TOKEN_EXPIRE_MINUTES')
+    # def validate_access_token_expiration(cls, v):
+    #     if v < 15:  # Minimum 15 minutes for access tokens in production
+    #         raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be at least 15 minutes in production")
+    #     if v > 45:  # Maximum 45 minutes for access tokens in production
+    #         raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES should not exceed 45 minutes in production")
+    #     return v
+    
+    # @field_validator('REFRESH_TOKEN_EXPIRE_DAYS')
+    # def validate_refresh_token_expiration(cls, v):
+    #     if v < 7:  # Minimum 7 days for refresh tokens in production
+    #         raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS must be at least 7 days in production")
+    #     if v > 30:  # Maximum 30 days for refresh tokens in production
+    #         raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS should not exceed 30 days in production")
+    #     return v
+    
+    # @field_validator('PASSWORD_RESET_TOKEN_EXPIRE_MINUTES')
+    # def validate_password_reset_expiration(cls, v):
+    #     if v < 15:  # Minimum 15 minutes for password reset in production
+    #         raise ValueError("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES must be at least 15 minutes in production")
+    #     if v > 30:  # Maximum 30 minutes for password reset in production
+    #         raise ValueError("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES should not exceed 30 minutes in production")
+    #     return v

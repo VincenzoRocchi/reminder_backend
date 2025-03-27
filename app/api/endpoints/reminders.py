@@ -19,11 +19,11 @@ async def read_reminders(
     skip: int = 0,
     limit: int = 100,
     active_only: bool = False,
-    service_account_id: int = None,
+    sender_identity_id: int = None,
 ):
     """
     Retrieve reminders for the current user.
-    Optionally filter by active status or service account.
+    Optionally filter by active status or sender identity.
     """
     return reminder_service.get_user_reminders(
         db,
@@ -31,7 +31,7 @@ async def read_reminders(
         skip=skip,
         limit=limit,
         active_only=active_only,
-        service_account_id=service_account_id
+        sender_identity_id=sender_identity_id
     )
 
 @router.post("/", response_model=ReminderDetail, status_code=status.HTTP_201_CREATED)

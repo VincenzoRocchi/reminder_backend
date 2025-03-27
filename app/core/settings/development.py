@@ -19,11 +19,11 @@ class DevelopmentSettings(BaseAppSettings):
         env_key = os.getenv("DEV_SECRET_KEY")
         if env_key:
             return env_key
-            
-        # If not found, generate a key
+        
+        # If not found, use cached or generate a new key
         if DevelopmentSettings._dev_secret_key is None:
             DevelopmentSettings._dev_secret_key = secrets.token_urlsafe(32)
-            print("WARNING: Using a generated DEV_SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
+            logger.warning("Using a generated DEV_SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
         
         return DevelopmentSettings._dev_secret_key
     
@@ -68,4 +68,4 @@ class DevelopmentSettings(BaseAppSettings):
                 "No database connection configured. Please set DB_HOST, DB_USER, "
                 "DB_PASSWORD, and DB_NAME in your .env.development file."
             )
-        return v
+        return v 

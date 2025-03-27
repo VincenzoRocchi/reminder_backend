@@ -35,6 +35,10 @@ class ReminderCreate(ReminderBase):
     """Schema for creating a reminder"""
     client_ids: List[int]  # IDs of clients to receive the reminder
 
+class ReminderCreateDB(ReminderBase):
+    """Schema for creating a reminder in the database (without client_ids)"""
+    user_id: int
+
 class ReminderUpdate(BaseModel):
     """Schema for updating a reminder"""
     title: Optional[str] = Field(None, min_length=1, max_length=255)

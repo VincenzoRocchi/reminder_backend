@@ -53,9 +53,7 @@ class SchedulerService:
         and activates the scheduler. This job frequency represents a balance
         between timely reminder delivery and system load.
         
-        The scheduler will not start if:
-        1. DISABLE_SCHEDULER setting is True (any environment)
-        2. In testing environment only: No reminders are found in the database
+        The scheduler will not start if DISABLE_SCHEDULER setting is True.
         """
         from app.core.settings import settings
         
@@ -65,18 +63,6 @@ class SchedulerService:
         if getattr(settings, "DISABLE_SCHEDULER", False):
             logger.info("Scheduler disabled via DISABLE_SCHEDULER setting")
             return
-        
-        # In testing environment, only start if there are reminders
-        if settings.ENV == "testing":
-            db = SessionLocal()
-            try:
-                reminder_count = db.query(Reminder).count()
-                if reminder_count == 0:
-                    logger.info("No reminders found in testing environment. Scheduler will not start.")
-                    return
-                logger.info(f"Found {reminder_count} reminders in testing environment. Starting scheduler.")
-            finally:
-                db.close()
         
         # Add job to process reminders every minute
         self.scheduler.add_job(
@@ -93,11 +79,7 @@ class SchedulerService:
         """
         Process reminders that are due to be sent.
         """
-        # In testing environment, check if we should log
-        should_log = settings.ENV != "testing"
-        
-        if should_log:
-            logger.info("Processing due reminders")
+        logger.info("Processing due reminders")
         
         db = SessionLocal()
         try:
@@ -113,10 +95,6 @@ class SchedulerService:
                 .all()
             )
             
-            # Skip verbose logging in testing mode if no reminders found
-            if not due_reminders and settings.ENV == "testing":
-                return
-                
             for reminder in due_reminders:
                 # Get the user who created the reminder
                 user = db.query(User).filter(User.id == reminder.user_id).first()
