@@ -10,7 +10,7 @@ wheels/
 uv.lock
 tempCodeRunnerFile.py
 tempCodeRunnerFile.python
-dbtest.py
+test.db
 psw.txt
 pyproject.toml
 .vscode
