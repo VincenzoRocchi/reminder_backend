@@ -85,7 +85,8 @@ class ClientService:
         user_id: int,
         skip: int = 0,
         limit: int = 100,
-        active_only: bool = False
+        active_only: bool = False,
+        search: str = None
     ) -> List[Client]:
         """
         Get all clients for a user.
@@ -96,6 +97,7 @@ class ClientService:
             skip: Number of records to skip
             limit: Maximum number of records to return
             active_only: Whether to return only active clients
+            search: Optional search term to filter by name or email
             
         Returns:
             List[Client]: List of clients
@@ -105,7 +107,8 @@ class ClientService:
             user_id=user_id,
             skip=skip,
             limit=limit,
-            active_only=active_only
+            active_only=active_only,
+            search=search
         )
     
     def create_client(self, db: Session, *, client_in: ClientCreate, user_id: int) -> Client:
@@ -144,9 +147,13 @@ class ClientService:
                 )
         
         # Create client with user_id
-        client_data = client_in.model_dump()
-        client_data["user_id"] = user_id
-        return self.repository.create(db, obj_in=ClientCreate(**client_data))
+        obj_in_data = client_in.model_dump()
+        db_obj = self.repository.model(**obj_in_data)
+        db_obj.user_id = user_id
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
     
     def update_client(
         self, 

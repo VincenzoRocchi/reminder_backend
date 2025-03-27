@@ -42,6 +42,16 @@ async def create_reminder(
 ):
     """
     Create a new reminder with client associations.
+    
+    - **reminder_type**: Supported values - PAYMENT, DEADLINE, NOTIFICATION
+    - **notification_type**: Supported values - EMAIL, SMS, WHATSAPP
+    - **reminder_date**: ISO 8601 datetime format (e.g., "2025-03-27T15:00:09.105Z")
+      This is the date when the reminder should be sent, not the creation date.
+      Examples:
+        - "2025-03-27T15:00:00Z" (March 27, 2025 at 3:00 PM UTC)
+        - "2025-12-31T23:59:59Z" (December 31, 2025 at 11:59 PM UTC)
+    - **client_ids**: List of client IDs who should receive this reminder
+    - **recurrence_pattern**: Only needed if is_recurring=True. Format suggestions: "DAILY", "WEEKLY", "MONTHLY"
     """
     return reminder_service.create_reminder(
         db,

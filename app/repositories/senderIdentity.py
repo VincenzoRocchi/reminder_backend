@@ -139,6 +139,53 @@ class SenderIdentityRepository(BaseRepository[SenderIdentity, SenderIdentityCrea
                 self.model.value == value
             )
         ).first()
+        
+    def set_default_identity(
+        self,
+        db: Session,
+        *,
+        identity_id: int,
+        user_id: int
+    ) -> SenderIdentity:
+        """
+        Set a sender identity as default for its type.
+        Unsets default on all other identities of the same type for this user.
+        
+        Args:
+            db: Database session
+            identity_id: ID of the identity to set as default
+            user_id: User ID
+            
+        Returns:
+            SenderIdentity: The updated identity
+        """
+        # Get the identity to set as default
+        identity = db.query(self.model).filter(
+            and_(
+                self.model.id == identity_id,
+                self.model.user_id == user_id
+            )
+        ).first()
+        
+        if not identity:
+            return None
+            
+        # Clear the default flag for all identities of this type
+        db.query(self.model).filter(
+            and_(
+                self.model.user_id == user_id,
+                self.model.identity_type == identity.identity_type,
+                self.model.id != identity_id
+            )
+        ).update({"is_default": False})
+        
+        # Set this identity as default
+        identity.is_default = True
+        db.add(identity)
+        db.commit()
+        db.refresh(identity)
+        
+        return identity
 
 # Create singleton instance
 sender_identity_repository = SenderIdentityRepository(SenderIdentity) 
