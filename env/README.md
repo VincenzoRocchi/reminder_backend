@@ -33,5 +33,5 @@ cp env/.env.example env/.env.production
 
 ## Security Note
 
-**IMPORTANT:** Never commit these environment files with sensitive information to version control. 
-These files contain database credentials, API keys, and other sensitive information. 
+**IMPORTANT:** Never commit these environment files with sensitive information to version control.
+These files contain database credentials, API keys, and other sensitive information.
