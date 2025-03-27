@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, Optional
+from jose import jwt, JWTError
 from app.core.settings import settings
 from app.core.redis import redis_connection
-from app.core.exceptions import RedisError
+from app.core.exceptions import RedisError, TokenInvalidError
+from app.core.security import get_signing_key
 
 logger = logging.getLogger(__name__)
 
@@ -107,3 +109,38 @@ class TokenBlacklist:
 
 # Create singleton instance
 token_blacklist = TokenBlacklist()
+
+def is_token_blacklisted(token: str) -> bool:
+    """
+    Check if a token is blacklisted.
+    This is a wrapper around TokenBlacklist.is_blacklisted that can be imported directly.
+    
+    Args:
+        token: The full JWT token to check
+        
+    Returns:
+        bool: True if token is blacklisted, False otherwise
+    """
+    try:
+        # Decode the token to get the JTI claim
+        # We use verify=False because we only need the JWT claims, not a full validation
+        # The token validation is done elsewhere in the auth process
+        payload = jwt.decode(
+            token, 
+            get_signing_key(), 
+            algorithms=[settings.ALGORITHM], 
+            options={"verify_signature": True}
+        )
+        
+        # Get the JTI (JWT ID) claim
+        jti = payload.get("jti")
+        if not jti:
+            logger.warning("Token has no JTI claim")
+            return False
+        
+        # Check if the token is in the blacklist
+        return token_blacklist.is_blacklisted(jti)
+    except JWTError as e:
+        # If token can't be decoded, log and return False to avoid blocking valid requests
+        logger.warning(f"Could not decode token for blacklist check: {str(e)}")
+        return False
