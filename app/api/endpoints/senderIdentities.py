@@ -55,7 +55,7 @@ async def create_sender_identity(
     """
     return sender_identity_service.create_sender_identity(
         db,
-        identity_in=identity_in,
+        obj_in=identity_in,
         user_id=current_user.id
     )
 
@@ -70,7 +70,7 @@ async def read_sender_identity(
     """
     return sender_identity_service.get_sender_identity(
         db,
-        identity_id=identity_id,
+        sender_identity_id=identity_id,
         user_id=current_user.id
     )
 
@@ -86,9 +86,9 @@ async def update_sender_identity(
     """
     return sender_identity_service.update_sender_identity(
         db,
-        identity_id=identity_id,
+        sender_identity_id=identity_id,
         user_id=current_user.id,
-        identity_in=identity_in
+        obj_in=identity_in
     )
 
 @router.delete("/{identity_id}")
@@ -102,7 +102,7 @@ async def delete_sender_identity(
     """
     sender_identity_service.delete_sender_identity(
         db,
-        identity_id=identity_id,
+        sender_identity_id=identity_id,
         user_id=current_user.id
     )
     return {"detail": "Sender identity deleted successfully"}
@@ -120,6 +120,22 @@ async def verify_sender_identity(
     """
     return sender_identity_service.verify_sender_identity(
         db,
-        identity_id=identity_id,
+        sender_identity_id=identity_id,
+        user_id=current_user.id
+    )
+
+@router.post("/{identity_id}/set-default", response_model=SenderIdentity)
+async def set_default_sender_identity(
+    identity_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+):
+    """
+    Set a sender identity as the default for its type.
+    This will unset any other identity of the same type as default.
+    """
+    return sender_identity_service.set_default_identity(
+        db,
+        sender_identity_id=identity_id,
         user_id=current_user.id
     )

@@ -21,7 +21,8 @@ class ClientRepository(BaseRepository[Client, ClientCreate, ClientUpdate]):
         user_id: int,
         skip: int = 0,
         limit: int = 100,
-        active_only: bool = False
+        active_only: bool = False,
+        search: str = None
     ) -> List[Client]:
         """
         Get all clients for a specific user.
@@ -32,6 +33,7 @@ class ClientRepository(BaseRepository[Client, ClientCreate, ClientUpdate]):
             skip: Number of records to skip
             limit: Maximum number of records to return
             active_only: Whether to return only active clients
+            search: Optional search term to filter by name or email
             
         Returns:
             List[Client]: List of clients
@@ -40,6 +42,15 @@ class ClientRepository(BaseRepository[Client, ClientCreate, ClientUpdate]):
         
         if active_only:
             query = query.filter(Client.is_active == True)
+            
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Client.name.ilike(search_term),
+                    Client.email.ilike(search_term)
+                )
+            )
             
         return query.offset(skip).limit(limit).all()
     
