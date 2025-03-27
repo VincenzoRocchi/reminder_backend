@@ -1,6 +1,7 @@
 import os
 import uvicorn
 from dotenv import load_dotenv
+from pathlib import Path
 
 def choose_environment():
     """
@@ -32,8 +33,16 @@ if __name__ == "__main__":
     os.environ["ENV"] = env
     
     # Load the appropriate environment file
-    env_file = f".env.{env}"
-    load_dotenv(env_file)
+    env_file = Path(f"env/.env.{env}")
+    if env_file.exists():
+        print(f"Loading environment from: {env_file}")
+        load_dotenv(env_file)
+    else:
+        print(f"Warning: Environment file {env_file} not found")
+        fallback_env = Path("env/.env")
+        if fallback_env.exists():
+            print(f"Loading fallback environment from: {fallback_env}")
+            load_dotenv(fallback_env)
     
     # Configure uvicorn based on the environment
     if env == "development":

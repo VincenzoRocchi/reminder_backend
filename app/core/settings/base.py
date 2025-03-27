@@ -5,15 +5,9 @@ from pydantic import Field, SecretStr, field_validator, model_validator, ConfigD
 import os
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Get the environment and load the appropriate .env file
+# Get the environment - no need to load dotenv here, it's already loaded in __init__.py
 ENV = os.getenv("ENV", "development")
-env_file = f".env.{ENV}"
-if Path(env_file).exists():
-    load_dotenv(env_file)
-else:
-    load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +65,6 @@ class BaseAppSettings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")), description="Access token expiration (in minutes)")
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")), description="Refresh token expiration (in days)")
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15")), description="Password reset token expiration (in minutes)")
-    
-    # ------------------------------
-    # EMAIL SETTINGS
-    # ------------------------------
-    SMTP_HOST: str = Field(default=os.getenv("SMTP_HOST", ""), description="SMTP server host")
-    SMTP_PORT: int = Field(default=int(os.getenv("SMTP_PORT", "587")), description="SMTP port (587 for TLS)")
-    SMTP_USER: str = Field(default=os.getenv("SMTP_USER", ""), description="SMTP username")
-    SMTP_PASSWORD: str = Field(default=os.getenv("SMTP_PASSWORD", ""), description="SMTP password")
-    EMAIL_FROM: str = Field(default=os.getenv("EMAIL_FROM", "noreply@reminderapp.com"), description="From email address")
     
     # ------------------------------
     # TWILIO SETTINGS (SMS & WHATSAPP)
@@ -170,6 +155,11 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     SCHEDULER_TIMEZONE: str = Field(default=os.getenv("SCHEDULER_TIMEZONE", "UTC"), description="Timezone for scheduler (default: UTC)")
     
+    DISABLE_SCHEDULER: bool = Field(
+        default=os.getenv("DISABLE_SCHEDULER", "False").lower() == "true", 
+        description="Disable the reminder scheduler service completely"
+    )
+    
     # ------------------------------
     # COOKIE SECURITY
     # ------------------------------
@@ -222,8 +212,23 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     # PYDANTIC CONFIGURATION
     # ------------------------------
+    # Only look in env directory
+    @classmethod
+    def _find_env_file(cls):
+        env = os.getenv("ENV", "development")
+        paths = [
+            Path(f"env/.env.{env}"),
+            Path("env/.env")
+        ]
+        
+        for path in paths:
+            if path.exists():
+                return str(path)
+        
+        return None
+    
     model_config = ConfigDict(
-        env_file=env_file if Path(env_file).exists() else ".env",
+        env_file=_find_env_file.__func__(),
         env_file_encoding="utf-8",
         extra="ignore"
     )

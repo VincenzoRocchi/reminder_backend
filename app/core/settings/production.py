@@ -60,15 +60,6 @@ class ProductionSettings(BaseAppSettings):
             raise ValueError(error_msg)
         return v
     
-    # Email credentials validation
-    @field_validator('SMTP_HOST')
-    def validate_smtp_config(cls, v):
-        if not v or v == "localhost":
-            error_msg = "Production SMTP_HOST must be set to a valid host"
-            logger.warning(error_msg)
-            # Warning only, not raising error as email might be handled differently
-        return v
-    
     # Database validation
     @field_validator('SQLALCHEMY_DATABASE_URI')
     def validate_database_uri(cls, v):

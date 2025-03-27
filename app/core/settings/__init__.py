@@ -11,15 +11,20 @@ logger = logging.getLogger(__name__)
 ENV = os.getenv("ENV", "development")
 logger.debug(f"Settings initialization - Environment: {ENV}")
 
-# Load appropriate environment file
-env_file = f".env.{ENV}"
-if Path(env_file).exists():
+# Only load environment files from the env directory
+env_file = Path(f"env/.env.{ENV}")
+
+if env_file.exists():
     logger.debug(f"Loading environment file: {env_file}")
     load_dotenv(env_file)
 else:
-    # Fallback to default .env
-    logger.debug("Environment file not found, falling back to .env")
-    load_dotenv()
+    # Fallback to default .env in env directory
+    default_env = Path("env/.env")
+    if default_env.exists():
+        logger.debug(f"Environment file not found, falling back to {default_env}")
+        load_dotenv(default_env)
+    else:
+        logger.warning(f"No environment file found in env directory")
 
 # Log the CORS_ORIGINS value for debugging
 cors_value = os.getenv("CORS_ORIGINS", "")

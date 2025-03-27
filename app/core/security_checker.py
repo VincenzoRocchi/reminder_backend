@@ -53,7 +53,6 @@ class SecurityChecker:
             sensitive_patterns = {
                 "SECRET_KEY": r'SECRET_KEY=(.+)',
                 "DB_PASSWORD": r'DB_PASSWORD=(.+)',
-                "SMTP_PASSWORD": r'SMTP_PASSWORD=(.+)',
                 "TWILIO_AUTH_TOKEN": r'TWILIO_AUTH_TOKEN=(.+)',
                 "REDIS_PASSWORD": r'REDIS_PASSWORD=(.+)',
                 "API_KEY": r'.*API_KEY=(.+)'
@@ -102,9 +101,6 @@ class SecurityChecker:
                 
             if not self.settings.TWILIO_AUTH_TOKEN or len(self.settings.TWILIO_AUTH_TOKEN) < 10:
                 results["errors"].append("Production Twilio Auth Token not properly configured")
-                
-            if not self.settings.SMTP_HOST or self.settings.SMTP_HOST == "localhost":
-                results["warnings"].append("Production SMTP host should not be localhost")
                 
         # Add more service credential checks as needed
                 
@@ -178,4 +174,93 @@ def check_security_at_startup(settings):
     for warning in results["env_files"]["warnings"] + results["service_credentials"]["warnings"]:
         logger.warning(f"Security warning: {warning}")
         
-    return results 
+    return results
+
+def get_aws_secrets_manager_setup_instructions():
+    """
+    Returns instructions for setting up AWS Secrets Manager for production.
+    This is a helper method to guide teams when they're ready to move to a cloud secrets management solution.
+    """
+    instructions = """
+    # AWS Secrets Manager Setup Guide
+    
+    Follow these steps to set up AWS Secrets Manager for production:
+    
+    ## 1. Create an AWS account or use an existing one
+    
+    ## 2. Install AWS CLI and configure
+    ```bash
+    # Install AWS CLI
+    pip install awscli
+    
+    # Configure with your credentials
+    aws configure
+    ```
+    
+    ## 3. Create a secret for each environment
+    ```bash
+    # Create a secret for production
+    aws secretsmanager create-secret --name reminder-app/production --secret-string '{
+        "SECRET_KEY": "your-strong-production-secret-key",
+        "DB_PASSWORD": "your-strong-database-password",
+        "TWILIO_ACCOUNT_SID": "your-twilio-account-sid",
+        "TWILIO_AUTH_TOKEN": "your-twilio-auth-token"
+    }'
+    ```
+    
+    ## 4. Set up IAM roles and permissions
+    - Create IAM roles for your application with least privilege
+    - Attach policies to allow reading specific secrets
+    
+    ## 5. Install AWS SDK in your app
+    ```bash
+    pip install boto3
+    ```
+    
+    ## 6. Implement a SecretManager class that uses AWS SDK
+    ```python
+    import boto3
+    import json
+    
+    class AWSSecretsManager:
+        def __init__(self, environment="development"):
+            self.client = boto3.client('secretsmanager')
+            self.secret_name = f"reminder-app/{environment}"
+            
+        def get_secrets(self):
+            try:
+                response = self.client.get_secret_value(SecretId=self.secret_name)
+                if 'SecretString' in response:
+                    return json.loads(response['SecretString'])
+                else:
+                    # Binary secrets are not supported in this example
+                    return {}
+            except Exception as e:
+                print(f"Error retrieving secrets: {str(e)}")
+                return {}
+                
+        def get_secret(self, key):
+            secrets = self.get_secrets()
+            return secrets.get(key)
+    ```
+    
+    ## 7. Update your settings to use AWS Secrets Manager
+    ```python
+    # In your settings file
+    if ENV == "production":
+        # Use AWS Secrets Manager in production
+        from app.core.aws_secrets_manager import AWSSecretsManager
+        secrets = AWSSecretsManager(ENV).get_secrets()
+        
+        # Override environment variables with secrets if available
+        if "SECRET_KEY" in secrets:
+            os.environ["SECRET_KEY"] = secrets["SECRET_KEY"]
+        # ... and so on for other sensitive variables
+    ```
+    
+    ## 8. Set up secret rotation
+    - Configure automatic rotation in AWS console
+    - Implement rotation lambda function if needed
+    """
+    
+    return instructions 

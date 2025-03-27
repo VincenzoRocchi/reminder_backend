@@ -16,7 +16,10 @@ pyproject.toml
 .vscode
 *.db
 secrets/
-*.env
+
+# Environment configuration
+env/.env.*
+env/.env
 
 # Virtual environments
 .venv

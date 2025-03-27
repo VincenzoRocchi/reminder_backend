@@ -19,17 +19,8 @@ class DevelopmentSettings(BaseAppSettings):
         env_key = os.getenv("DEV_SECRET_KEY")
         if env_key:
             return env_key
-        
-        # Next try from secrets
-        try:
-            from app.core.secrets_manager import secrets_manager
-            security_secrets = secrets_manager.get_category("security")
-            if security_secrets and "dev_secret_key" in security_secrets:
-                return security_secrets["dev_secret_key"]
-        except Exception as e:
-            logger.debug(f"Could not load DEV_SECRET_KEY from secrets: {e}")
-        
-        # Finally, generate a key if needed
+            
+        # If not found, generate a key
         if DevelopmentSettings._dev_secret_key is None:
             DevelopmentSettings._dev_secret_key = secrets.token_urlsafe(32)
             print("WARNING: Using a generated DEV_SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")

@@ -8,13 +8,12 @@ This document outlines security best practices for managing credentials and envi
 - [ ] Never commit `.env.*` files to source control (they should be in `.gitignore`)
 - [ ] Use different `.env.*` files for each environment (development, testing, production)
 - [ ] Keep backups of production environment variables in a secure location
-- [ ] Use a secrets management service for production deployments (AWS Secrets Manager, HashiCorp Vault, etc.)
+- [ ] For production deployments, consider using a cloud secrets management service (AWS Secrets Manager, HashiCorp Vault, etc.)
 
 ### Critical Security Keys
 - [ ] `SECRET_KEY`: Must be at least 32 characters, randomly generated for production
 - [ ] `TWILIO_AUTH_TOKEN`: Must be stored securely and never committed to source code
 - [ ] `DB_PASSWORD`: Use strong unique passwords for each environment
-- [ ] `SMTP_PASSWORD`: Use application-specific passwords when possible
 
 ## Environment-Specific Requirements
 
@@ -25,6 +24,8 @@ This document outlines security best practices for managing credentials and envi
 - [ ] All service credentials must be valid and secure
 - [ ] `CORS_ORIGINS` must include only trusted domains
 - [ ] All settings validators in `ProductionSettings` class must pass
+- [ ] Consider using environment variables set at the system/container level instead of .env files
+- [ ] For cloud deployments, use platform-provided secrets management services
 
 ### Testing Environment
 - [ ] Can use SQLite for simplified testing
@@ -38,6 +39,19 @@ This document outlines security best practices for managing credentials and envi
 - [ ] Should still use reasonably secure credentials
 
 ## Credentials Management
+
+### Managing Sensitive Credentials
+Follow these best practices for handling sensitive credentials:
+
+1. Store all sensitive credentials in environment variables
+2. Use separate environment files for each environment (.env.development, .env.testing, .env.production)
+3. Create separate accounts/projects for development and production services
+4. Use test/sandbox credentials for non-production environments
+5. For production systems, consider:
+   - Environment variables set directly in the hosting environment
+   - AWS Secrets Manager, GCP Secret Manager, or Azure Key Vault
+   - Kubernetes Secrets for container deployments
+6. Periodically rotate all credentials
 
 ### Managing Twilio Credentials
 Twilio is used for both SMS and WhatsApp notifications through a unified TwilioService. Secure its credentials:
@@ -113,8 +127,8 @@ security-check:
 | SECRET_KEY | Simple key | Test key | Strong (32+ chars) |
 | USE_REDIS | Optional | Disabled | Required |
 | TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN | Test account | Empty/Mock | Production account |
-| SMTP_* | Test accounts | Empty/Mock | Production accounts |
 | CORS_ORIGINS | Multiple | Multiple | Restricted |
 | RATE_LIMIT | High | Disabled | Enforced |
 
-Note: Twilio phone numbers are NOT stored in environment variables. They are stored in the `SenderIdentity` model for each user. 
+Note: Twilio phone numbers are NOT stored in environment variables. They are stored in the `SenderIdentity` model for each user.
+Note: Email/SMTP configuration is NOT stored in environment variables. It is stored in the `EmailConfiguration` model for each user. 

@@ -1,6 +1,7 @@
 # app/core/settings/testing.py
 from app.core.settings.base import BaseAppSettings
-from pydantic import field_validator
+from pydantic import field_validator, Field
+import os
 
 class TestingSettings(BaseAppSettings):
     """Settings for the testing environment."""

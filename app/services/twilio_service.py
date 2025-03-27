@@ -19,25 +19,17 @@ class TwilioService:
     @staticmethod
     def get_twilio_credentials() -> Tuple[Optional[str], Optional[str]]:
         """
-        Get Twilio credentials from settings or secrets.
+        Get Twilio credentials from settings.
         
         Returns:
             Tuple containing (account_sid, auth_token)
         """
         try:
-            # Import secrets manager here to avoid circular imports
-            from app.core.secrets_manager import secrets_manager
+            account_sid = settings.TWILIO_ACCOUNT_SID
+            auth_token = settings.TWILIO_AUTH_TOKEN
             
-            # Try to get from secrets first
-            try:
-                sms_secrets = secrets_manager.get_category("sms")
-                account_sid = sms_secrets.get("twilio_account_sid") or settings.TWILIO_ACCOUNT_SID
-                auth_token = sms_secrets.get("twilio_auth_token") or settings.TWILIO_AUTH_TOKEN
-            except Exception as e:
-                # Fall back to settings if secrets fail
-                logger.warning(f"Error accessing SMS secrets: {str(e)}")
-                account_sid = settings.TWILIO_ACCOUNT_SID
-                auth_token = settings.TWILIO_AUTH_TOKEN
+            if not account_sid or not auth_token:
+                logger.warning("Twilio credentials not configured in environment variables")
                 
             return account_sid, auth_token
             
