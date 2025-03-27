@@ -1,4 +1,6 @@
 import pytest
+import os
+import logging
 from unittest.mock import patch, MagicMock
 
 from app.core.validators import (
@@ -7,13 +9,27 @@ from app.core.validators import (
     flexible_field_validator
 )
 from app.core.exceptions import InvalidConfigurationError
+from app.core.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def test_validate_twilio_token_valid():
     """Test that valid Twilio tokens are accepted"""
-    valid_token = "SK12345678901234567890123456789012"  # 32 chars, starts with SK
-    result = validate_twilio_token(valid_token)
-    assert result == valid_token
+    # Get the test token from settings
+    test_token = settings.TEST_TWILIO_TOKEN
+    
+    # Skip test if the token is not available
+    if not test_token:
+        logger.warning(
+            "TEST_TWILIO_TOKEN setting is not configured. "
+            "This test will be skipped. Please set this variable in your .env.testing file. "
+            "Do not use real production credentials for testing."
+        )
+        pytest.skip("TEST_TWILIO_TOKEN setting not configured")
+    
+    result = validate_twilio_token(test_token)
+    assert result == test_token
 
 
 def test_validate_twilio_token_invalid_prefix():
