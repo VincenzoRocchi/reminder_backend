@@ -36,7 +36,12 @@ A comprehensive backend system for businesses (such as accounting firms) to mana
 reminder_app/
 ├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
-├── .env.example               # Example environment variables
+├── env/                       # Environment configuration directory
+│   ├── .env.example           # Example environment variables
+│   ├── .env.development       # Development environment variables (create from .env.example)
+│   ├── .env.testing           # Testing environment variables (create from .env.example)
+│   ├── .env.production        # Production environment variables (create from .env.example)
+│   └── README.md              # Environment setup instructions
 ├── docker-compose.yml         # Docker Compose configuration
 ├── Dockerfile                 # Docker configuration
 ├── main.py                    # Application entry point
@@ -129,11 +134,20 @@ uv is a fast Python package installer and resolver that can significantly speed 
    uv pip sync [requirements.txt]
    ```
 
-5. Copy `.env.example` to `.env` and configure environment variables:
+5. Copy `.env.example` to create environment-specific configuration files:
 
    ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
+   # Create directory if it doesn't exist
+   mkdir -p env
+   
+   # Create environment files from example
+   cp env/.env.example env/.env.development
+   cp env/.env.example env/.env.testing
+   cp env/.env.example env/.env.production
+   
+   # Edit each file with appropriate configuration
+   # For example, edit the development environment
+   nano env/.env.development  # or use your preferred editor
    ```
 
 6. Run database migrations:
@@ -164,144 +178,18 @@ uv is a fast Python package installer and resolver that can significantly speed 
    pip install -r requirements.txt
    ```
 
-4. Copy `.env.example` to `.env` and configure environment variables:
+4. Copy `.env.example` to create environment-specific configuration files:
 
    ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
+   # Create directory if it doesn't exist
+   mkdir -p env
+   
+   # Create environment files from example
+   cp env/.env.example env/.env.development
+   cp env/.env.example env/.env.testing
+   cp env/.env.example env/.env.production
+   
+   # Edit each file with appropriate configuration
+   # For example, edit the development environment
+   nano env/.env.development  # or use your preferred editor
    ```
-
-5. Run database migrations:
-
-   ```bash
-   alembic upgrade head
-   ```
-
-### Running the Application
-
-#### Development Mode
-
-```bash
-python main.py
-```
-
-or
-
-```bash
-uvicorn app.main:app --reload
-```
-
-#### Using Docker
-
-```bash
-docker-compose up
-```
-
-### API Documentation
-
-Once the application is running, access the API documentation at:
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-## Testing
-
-Run tests with pytest:
-
-``` bash
-pytest
-```
-
-## Database Migrations
-
-Create a new migration:
-
-``` bash
-alembic revision --autogenerate -m "Description of changes"
-```
-
-Apply migrations:
-
-``` bash
-alembic upgrade head
-```
-
---------------------------------------------# Security and Authentication Enhancements #-------------------------
-
-## Security Headers
-
-We've implemented a custom middleware that adds essential security headers to every API response:
-
-- **X-Content-Type-Options: nosniff** - Prevents browsers from interpreting files as a different MIME type than declared, reducing XSS risks
-- **X-Frame-Options: DENY** - Prevents our application from being embedded in iframes, protecting against clickjacking attacks
-- **X-XSS-Protection: 1; mode=block** - Enables browser's built-in XSS filtering capabilities
-- **Strict-Transport-Security** (Production Only) - Enforces HTTPS connections for increased transport security
-- **Content-Security-Policy** (Production Only) - Controls which resources the browser is allowed to load
-
-## Transport Security
-
-In production environments, the application automatically redirects all HTTP requests to HTTPS, ensuring all client-server communication is encrypted. This is implemented via FastAPI's HTTPSRedirectMiddleware.
-
-## Host Validation
-
-To prevent HTTP Host header attacks and DNS rebinding attacks, we've implemented TrustedHostMiddleware in production environments. This ensures that requests are only accepted from explicitly defined hosts.
-
-## Enhanced CORS Configuration
-
-We've improved Cross-Origin Resource Sharing (CORS) configuration by:
-
-- Using specific origins from settings instead of wildcard allowances
-- Explicitly listing allowed HTTP methods rather than allowing all methods
-- Restricting allowed headers to only those needed by the application
-- Configuring credentials handling properly based on environment requirements
-
-## Authentication Improvements
-
-The authentication system has been enhanced with:
-
-- **Refresh Token Support** - Implements the OAuth2 refresh token flow for improved user experience
-- **Token Blacklisting** - Prevents reuse of invalidated tokens, improving security after logout
-- **Token Versioning** - Supports future authentication scheme changes without breaking existing sessions
-- **Enhanced Validation** - Adds explicit checks for token expiration and validity
-
-## Data Protection
-
-Sensitive data protection has been improved with:
-
-- **Versioned Encryption** - Adds versioning to encrypted data to support future cryptographic upgrades
-- **Key Rotation Support** - Architecture supports cryptographic key rotation for long-term security
-- **Granular Exception Handling** - More specific error types for different security scenarios
-
-## Rate Limiting
-
-Authentication endpoints are now protected with rate limiting to prevent brute force attacks:
-
-- Login attempts are limited to prevent password guessing
-- Account creation is rate-limited to prevent abuse
-- Implements progressive delays for repeated failed attempts
-
-## Environment-Based Security
-
-Security features are applied contextually based on the environment:
-
-- Development environments maintain security while enabling debugging
-- Production environments enforce the strictest security controls
-- Testing environments allow for security testing without interference
-
-## Validation Settings
-
-The application supports two validation modes:
-
-- **Strict Validation** (default in production): All input validation rules are enforced
-- **Relaxed Validation** (optional in development): Validation warnings are logged but don't block operations
-
-To enable relaxed validation in development:
-
-```bash
-# In your .env.development file
-STRICT_VALIDATION=False
-```
-
-## License
-
-[MIT](LICENSE)
