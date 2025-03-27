@@ -115,9 +115,7 @@ class BaseAppSettings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = Field(default=os.getenv("TWILIO_ACCOUNT_SID", ""), description="Twilio account SID")
     TWILIO_AUTH_TOKEN: str = Field(default=os.getenv("TWILIO_AUTH_TOKEN", ""), description="Twilio authentication token")
     # Each client will provide their own phone number when sending messages
-    # Registration dev phone number is stored in application settings
-    TWILIO_PHONE_NUMBER: str = Field(default=os.getenv("TWILIO_PHONE_NUMBER", ""), description="Default Twilio phone number")
-    TEST_TWILIO_TOKEN: str = Field(default=os.getenv("TEST_TWILIO_TOKEN", ""), description="Test Twilio token for validation tests")
+    # No default phone number is stored in application settings
     
     # ------------------------------
     # ENVIRONMENT SETTINGS

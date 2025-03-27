@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import logging
-import os
 
 from app.core.settings import settings
 from app.api.routes import api_router
@@ -91,12 +90,13 @@ async def startup_event():
         logger.critical(f"Production environment has {security_results['total_errors']} security issues")
         # In a real-world scenario, you might want to prevent startup in production
         # if critical security issues are found
-    
+        
     # Create default admin superuser if needed
     from app.database import SessionLocal
     from app.models.users import User
     from app.core.security import get_password_hash
     from sqlalchemy import or_
+    import os
     
     db = SessionLocal()
     try:

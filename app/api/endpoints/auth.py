@@ -3,8 +3,6 @@ from fastapi import APIRouter, Depends, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
-from typing import Annotated
-import logging
 
 from app.core.rate_limiter import rate_limit_login
 from app.api.dependencies import get_current_user, oauth2_scheme
@@ -22,8 +20,6 @@ from app.database import get_db_session as get_db
 from app.schemas.token import Token
 from app.schemas.user import User
 from app.models.users import User as UserModel
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

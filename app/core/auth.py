@@ -2,9 +2,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import datetime
 import logging
-from sqlalchemy import or_
 
 from app.core.settings import settings
 from app.core.security import verify_password, get_signing_key
@@ -104,6 +104,7 @@ def authenticate_user(db: Session, email: str, password: str):
     Returns:
         User object if authentication successful, False otherwise
     """
+    # Check if the provided input is an email or username
     user = db.query(User).filter(or_(User.email == email, User.username == email)).first()
     if not user or not verify_password(password, user.hashed_password):
         return False
