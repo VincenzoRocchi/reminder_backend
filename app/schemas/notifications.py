@@ -30,11 +30,11 @@ class NotificationInDBBase(NotificationBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-class Notification(NotificationInDBBase):
+class NotificationSchema(NotificationInDBBase):
     """Complete notification model returned from API"""
     pass
 
-class NotificationDetail(Notification):
+class NotificationDetail(NotificationSchema):
     """Notification with extra details"""
     reminder_title: str
     client_name: str

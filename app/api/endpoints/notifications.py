@@ -6,13 +6,13 @@ from app.api.dependencies import get_current_user
 from app.database import get_db_session as get_db
 from app.models.users import User as UserModel
 from app.models.notifications import NotificationStatusEnum
-from app.schemas.notifications import Notification, NotificationUpdate, NotificationDetail
+from app.schemas.notifications import NotificationSchema, NotificationUpdate, NotificationDetail
 from app.core.exceptions import AppException
 from app.services.notification import notification_service
 
 router = APIRouter()
 
-@router.get("/", response_model=List[Notification])
+@router.get("/", response_model=List[NotificationSchema])
 async def read_notifications(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_user)],
@@ -63,7 +63,7 @@ async def read_notification(
         user_id=current_user.id
     )
 
-@router.put("/{notification_id}", response_model=Notification)
+@router.put("/{notification_id}", response_model=NotificationSchema)
 async def update_notification(
     notification_id: int,
     notification_in: Annotated[NotificationUpdate, Body],

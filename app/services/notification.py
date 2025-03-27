@@ -5,11 +5,11 @@ from datetime import datetime
 from app.repositories.notification import notification_repository
 from app.repositories.reminder import reminder_repository
 from app.repositories.client import client_repository
-from app.models.notifications import NotificationStatusEnum
+from app.models.notifications import Notification, NotificationStatusEnum
 from app.schemas.notifications import (
     NotificationCreate, 
     NotificationUpdate, 
-    Notification,
+    Notification as NotificationSchema,
     NotificationDetail
 )
 from app.core.exceptions import (
@@ -95,7 +95,7 @@ class NotificationService:
             )
         
         # Create NotificationDetail object
-        notification_data = Notification.model_validate(notification).model_dump()
+        notification_data = NotificationSchema.model_validate(notification).model_dump()
         return NotificationDetail(
             **notification_data,
             reminder_title=reminder.title,
