@@ -13,6 +13,30 @@ logger = logging.getLogger(__name__)
 
 class BaseAppSettings(BaseSettings):
     # ------------------------------
+    # SERVER SETTINGS
+    # ------------------------------
+    SERVER_HOST: str = Field(
+        default=os.getenv("SERVER_HOST", "127.0.0.1" if ENV == "testing" else "0.0.0.0"),
+        description="Host interface to bind the server to"
+    )
+    SERVER_PORT: int = Field(
+        default=int(os.getenv("SERVER_PORT", "8000" if ENV == "testing" else "5000")),
+        description="Port to run the server on"
+    )
+    SERVER_RELOAD: bool = Field(
+        default=os.getenv("SERVER_RELOAD", "True" if ENV == "testing" or ENV == "development" else "False").lower() == "true",
+        description="Enable auto-reload for development"
+    )
+    SERVER_WORKERS: int = Field(
+        default=int(os.getenv("SERVER_WORKERS", "1" if ENV == "testing" else "4")),
+        description="Number of worker processes"
+    )
+    SERVER_LOG_LEVEL: str = Field(
+        default=os.getenv("SERVER_LOG_LEVEL", "debug" if ENV == "testing" else "info"),
+        description="Server log level"
+    )
+    
+    # ------------------------------
     # API SETTINGS
     # ------------------------------
     API_V1_STR: str = Field(default="/api/v1", description="API v1 prefix")
@@ -111,6 +135,38 @@ class BaseAppSettings(BaseSettings):
         default=os.getenv("STRICT_VALIDATION", "True" if ENV != "development" else "False").lower() == "true",
         description="Enforce strict validation of sensitive data"
     )
+    
+    # Add the missing should_validate method
+    def should_validate(self, validation_type: str = 'all') -> bool:
+        """
+        Determines if validation should be enforced based on settings.
+        
+        Args:
+            validation_type: Type of validation to check ('all', 'format', 'security', etc.)
+            
+        Returns:
+            bool: True if validation should be enforced, False otherwise
+        """
+        # If strict validation is enabled, always validate
+        if self.STRICT_VALIDATION:
+            return True
+            
+        # For critical security validations, always validate regardless of STRICT_VALIDATION
+        if validation_type == 'security':
+            return True
+            
+        # In development, be more lenient with some validation types
+        if self.IS_DEVELOPMENT:
+            # We might want to allow some validation types to be bypassed in development
+            if validation_type in ['format', 'length']:
+                return False
+        
+        # In production, always validate unless explicitly disabled
+        if self.IS_PRODUCTION:
+            return True
+            
+        # Default behavior for other environments/validation types
+        return False
     
     # ------------------------------
     # LOGGING SETTINGS

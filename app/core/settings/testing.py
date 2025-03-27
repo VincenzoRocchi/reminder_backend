@@ -2,6 +2,9 @@
 from app.core.settings.base import BaseAppSettings
 from pydantic import field_validator, Field, model_validator
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TestingSettings(BaseAppSettings):
     """Settings for the testing environment."""
@@ -34,10 +37,13 @@ class TestingSettings(BaseAppSettings):
     @field_validator('STRICT_VALIDATION')
     def validate_strict_validation(cls, v):
         if v is False:
+            logger.error(
+                "STRICT_VALIDATION must be True in testing environment. "
+                "Setting it to False would invalidate test results as validation errors would be ignored."
+            )
             raise ValueError(
                 "STRICT_VALIDATION must be True in testing environment. "
-                "If you need strict validation OFF, use the development environment instead "
-                "by setting ENV=development."
+                "Setting it to False would invalidate test results as validation errors would be ignored."
             )
         return v
 

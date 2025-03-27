@@ -44,31 +44,17 @@ if __name__ == "__main__":
             print(f"Loading fallback environment from: {fallback_env}")
             load_dotenv(fallback_env)
     
-    # Configure uvicorn based on the environment
-    if env == "development":
-        uvicorn.run(
-            "app.main:app", 
-            host="0.0.0.0", 
-            port=8000, 
-            reload=True,
-            log_level="info"
-        )
-    elif env == "production":
-        uvicorn.run(
-            "app.main:app", 
-            host="0.0.0.0", 
-            port=8000, 
-            reload=False,
-            workers=4,
-            log_level="warning"
-        )
-    elif env == "testing":
-        uvicorn.run(
-            "app.main:app", 
-            host="127.0.0.1", 
-            port=8000, 
-            reload=True, 
-            log_level="debug"
-        )
-    else:
-        raise ValueError(f"Unknown environment: {env}")
+    # Import settings after loading environment variables
+    from app.core.settings import settings
+    
+    print(f"Starting server on {settings.SERVER_HOST}:{settings.SERVER_PORT} in {env} mode")
+    
+    # Run the application using settings
+    uvicorn.run(
+        "app.main:app", 
+        host=settings.SERVER_HOST, 
+        port=settings.SERVER_PORT, 
+        reload=settings.SERVER_RELOAD,
+        workers=settings.SERVER_WORKERS,
+        log_level=settings.SERVER_LOG_LEVEL
+    )

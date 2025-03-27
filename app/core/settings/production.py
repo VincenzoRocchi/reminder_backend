@@ -6,6 +6,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ProductionSettings(BaseAppSettings):
+    # Validate that we're using strict validation in production
+    @field_validator('STRICT_VALIDATION')
+    def validate_strict_validation(cls, v):
+        if v is False:
+            error_msg = "STRICT_VALIDATION must be True in production environment for security reasons"
+            logger.critical(error_msg)
+            raise ValueError(error_msg)
+        return v
+    
     # add extra validators for production (cookies)
     @field_validator('SECURE_COOKIES')
     def validate_secure_cookies(cls, v):
