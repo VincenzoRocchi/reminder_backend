@@ -18,8 +18,8 @@ pyproject.toml
 secrets/
 
 # Environment configuration
-env/.env.*
-env/.env
+env/*
+!env/env.example
 
 # Virtual environments
 .venv
