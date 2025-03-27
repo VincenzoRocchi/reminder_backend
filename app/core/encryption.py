@@ -43,6 +43,7 @@ from cryptography.hazmat.primitives.padding import PKCS7
 from pydantic import BaseModel, SecretStr, create_model, field_validator
 
 from app.core.settings import settings
+from app.core.exceptions import EncryptionError
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ class EncryptionService:
             return f"v1:{encrypted_data.decode()}"
         except Exception as e:
             logger.error(f"Error encrypting string: {str(e)}")
-            raise RuntimeError(f"Encryption failed: {str(e)}")
+            raise EncryptionError(f"Encryption failed: {str(e)}")
     
     def decrypt_string(self, encrypted_data: str) -> str:
         """
@@ -187,7 +188,7 @@ class EncryptionService:
                 return decrypted_data.decode()
         except Exception as e:
             logger.error(f"Error decrypting string: {str(e)}")
-            raise RuntimeError(f"Decryption failed: {str(e)}")
+            raise EncryptionError(f"Decryption failed: {str(e)}")
     
     def encrypt_dict(self, data: Dict[str, Any]) -> Dict[str, str]:
         """
@@ -272,7 +273,7 @@ class EncryptionService:
             return iv + ciphertext
         except Exception as e:
             logger.error(f"Error encrypting bytes: {str(e)}")
-            raise RuntimeError(f"Byte encryption failed: {str(e)}")
+            raise EncryptionError(f"Byte encryption failed: {str(e)}")
     
     def decrypt_bytes(self, encrypted_data: bytes) -> bytes:
         """
@@ -304,7 +305,7 @@ class EncryptionService:
             return data
         except Exception as e:
             logger.error(f"Error decrypting bytes: {str(e)}")
-            raise RuntimeError(f"Byte decryption failed: {str(e)}")
+            raise EncryptionError(f"Byte decryption failed: {str(e)}")
     
     # Async methods for better integration with FastAPI
     # These methods are thin wrappers around sync methods since cryptographic

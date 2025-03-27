@@ -1,148 +1,121 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Annotated
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_current_active_superuser
-from app.core.security import get_password_hash
 from app.database import get_db
-from app.models.user import User as UserModel
-from app.schemas.user import User, UserCreate, UserUpdate
+from app.models.users import User as UserModel
+from app.schemas.user import User, UserCreate, UserUpdate, UserWithRelations
+from app.core.exceptions import AppException, InsufficientPermissionsError, SecurityException, DatabaseError
+from app.services.user import user_service
 
 router = APIRouter()
 
+# Helper function to reduce code duplication
+def check_user_exists(db: Session, email: str = None, username: str = None):
+    """Check if a user with the given email or username already exists"""
+    if email:
+        db_user = db.query(UserModel).filter(UserModel.email == email).first()
+        if db_user:
+            raise AppException(
+                message="Email already registered",
+                code="EMAIL_ALREADY_EXISTS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+    
+    if username:
+        db_user = db.query(UserModel).filter(UserModel.username == username).first()
+        if db_user:
+            raise AppException(
+                message="Username already taken",
+                code="USERNAME_ALREADY_EXISTS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
 
 @router.get("/", response_model=List[User])
-def read_users(
-    db: Session = Depends(get_db),
+async def read_users(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
     skip: int = 0,
     limit: int = 100,
-    current_user: UserModel = Depends(get_current_active_superuser),
 ):
     """
     Retrieve users. Only superusers can access this endpoint.
     """
-    users = db.query(UserModel).offset(skip).limit(limit).all()
-    return users
+    return user_service.get_users(db, skip=skip, limit=limit)
 
-
-@router.post("/", response_model=User)
-def create_user(
-    user_in: UserCreate,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_superuser),
+@router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_in: Annotated[UserCreate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
 ):
     """
     Create new user. Only superusers can create new users.
     """
-    # Check if the user with this email exists
-    db_user = db.query(UserModel).filter(UserModel.email == user_in.email).first()
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The user with this email already exists in the system",
-        )
-    
-    # Create the user
-    user = UserModel(
-        email=user_in.email,
-        full_name=user_in.full_name,
-        hashed_password=get_password_hash(user_in.password),
-        phone_number=user_in.phone_number,
-        is_active=user_in.is_active,
-        is_superuser=False,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    return user_service.create_user(db, user_in=user_in)
 
+@router.get("/me", response_model=User)
+async def read_user_me(
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+):
+    """
+    Get current user information.
+    """
+    return current_user
 
 @router.get("/{user_id}", response_model=User)
-def read_user(
+async def read_user(
     user_id: int,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
     Get a specific user by id.
     """
-    user = db.query(UserModel).filter(UserModel.id == user_id).first()
-    if user == current_user or current_user.is_superuser:
-        return user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Not enough permissions to access this user",
-    )
-
+    user = user_service.get_user(db, user_id=user_id)
+    
+    if user.id != current_user.id and not current_user.is_superuser:
+        raise InsufficientPermissionsError(required_permission="superuser")
+    
+    return user
 
 @router.put("/{user_id}", response_model=User)
-def update_user(
+async def update_user(
     user_id: int,
-    user_in: UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    user_in: Annotated[UserUpdate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
     Update a user.
     """
-    user = db.query(UserModel).filter(UserModel.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    user = user_service.get_user(db, user_id=user_id)
     
-    # Only allow updating your own user or if you're a superuser
+    # Only allow updating yourself or if you're admin
     if user.id != current_user.id and not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this user",
-        )
+        raise InsufficientPermissionsError(required_permission="superuser")
     
-    # Update the user
-    if user_in.email is not None:
-        user.email = user_in.email
-    if user_in.full_name is not None:
-        user.full_name = user_in.full_name
-    if user_in.phone_number is not None:
-        user.phone_number = user_in.phone_number
-    if user_in.password is not None:
-        user.hashed_password = get_password_hash(user_in.password)
-    if user_in.is_active is not None and current_user.is_superuser:
-        user.is_active = user_in.is_active
-    
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    return user_service.update_user(db, user_id=user_id, user_in=user_in)
 
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
+):
+    """
+    Delete a user. Only superusers can delete users.
+    """
+    user_service.delete_user(db, user_id=user_id)
+    return {"detail": "User deleted successfully"}
 
-@router.post("/register", response_model=User)
-def register_user(
-    user_in: UserCreate,
-    db: Session = Depends(get_db),
+@router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
+async def register_user(
+    user_in: Annotated[UserCreate, Body()],
+    db: Annotated[Session, Depends(get_db)],
 ):
     """
     Register a new user without requiring existing authentication.
     """
-    # Check if the user with this email exists
-    db_user = db.query(UserModel).filter(UserModel.email == user_in.email).first()
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The user with this email already exists in the system",
-        )
-    
-    # Create the user
-    user = UserModel(
-        email=user_in.email,
-        full_name=user_in.full_name,
-        hashed_password=get_password_hash(user_in.password),
-        phone_number=user_in.phone_number,
-        is_active=True,
-        is_superuser=False,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    return user_service.create_user(db, user_in=user_in, is_active=True, is_superuser=False)

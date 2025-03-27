@@ -1,3 +1,4 @@
+# app/services/email_service.py
 import logging
 import aiosmtplib
 from email.mime.multipart import MIMEMultipart
@@ -5,9 +6,9 @@ from email.mime.text import MIMEText
 from typing import List, Optional
 
 from app.core.settings import settings
+from app.core.exceptions import ServiceError
 
 logger = logging.getLogger(__name__)
-
 
 class EmailService:
     """
@@ -16,7 +17,7 @@ class EmailService:
     
     @staticmethod
     async def send_email(
-        business,  # Add business parameter
+        email_configuration,
         recipient_email: str,
         subject: str,
         body: str,
@@ -24,10 +25,10 @@ class EmailService:
         html_content: Optional[str] = None,
     ) -> bool:
         """
-        Send an email to a recipient using business-specific SMTP settings.
+        Send an email to a recipient using email configuration SMTP settings.
         
         Args:
-            business: Business object with SMTP settings
+            email_configuration: EmailConfiguration object with SMTP settings
             recipient_email: Email address of the recipient
             subject: Subject of the email
             body: Text content of the email
@@ -38,22 +39,17 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         try:
-            # Check if business has SMTP configured
-            if not business.smtp_host or not business.smtp_user or not business.smtp_password:
-                logger.warning(f"Business {business.id} has no SMTP settings configured, falling back to global settings")
-                # Fall back to global settings if business settings not available
-                smtp_host = settings.SMTP_HOST
-                smtp_port = settings.SMTP_PORT
-                smtp_user = settings.SMTP_USER
-                smtp_password = settings.SMTP_PASSWORD
-                email_from = settings.EMAIL_FROM
-            else:
-                # Use business-specific settings
-                smtp_host = business.smtp_host
-                smtp_port = business.smtp_port
-                smtp_user = business.smtp_user
-                smtp_password = business.smtp_password
-                email_from = business.email_from or business.email or settings.EMAIL_FROM
+            # Check if email configuration is complete
+            if not email_configuration.smtp_host or not email_configuration.smtp_user or not email_configuration.smtp_password:
+                logger.error(f"Email configuration {email_configuration.id} has incomplete SMTP settings")
+                return False
+            
+            # Use email configuration settings
+            smtp_host = email_configuration.smtp_host
+            smtp_port = email_configuration.smtp_port
+            smtp_user = email_configuration.smtp_user
+            smtp_password = email_configuration.smtp_password
+            email_from = email_configuration.email_from
             
             message = MIMEMultipart('alternative')
             message['From'] = email_from
@@ -74,7 +70,7 @@ class EmailService:
             await aiosmtplib.send(
                 message,
                 hostname=smtp_host,
-                port=smtp_port or 587,
+                port=smtp_port,
                 username=smtp_user,
                 password=smtp_password,
                 use_tls=True,
@@ -85,28 +81,37 @@ class EmailService:
             
         except Exception as e:
             logger.error(f"Failed to send email to {recipient_email}: {str(e)}")
-            return False
+            raise ServiceError("email", "Failed to send email", str(e))
     
     @staticmethod
     async def send_reminder_email(
-        business,  # Add business parameter
+        email_configuration,
+        user,
         recipient_email: str,
         reminder_title: str,
         reminder_description: str,
+        sender_identity=None,
     ) -> bool:
         """
         Send a reminder email.
         
         Args:
-            business: Business object with SMTP settings
+            email_configuration: EmailConfiguration object with SMTP settings
+            user: User who owns the email configuration
             recipient_email: Email address of the recipient
             reminder_title: Title of the reminder
             reminder_description: Description of the reminder
+            sender_identity: Optional SenderIdentity object for customizing from name
             
         Returns:
             True if email was sent successfully, False otherwise
         """
-        subject = f"Reminder: {reminder_title} from {business.name}"
+        # Use sender identity display name if available, otherwise use business name or username
+        sender_name = user.business_name or user.username
+        if sender_identity and sender_identity.identity_type == "EMAIL":
+            sender_name = sender_identity.display_name
+        
+        subject = f"Reminder: {reminder_title} from {sender_name}"
         
         # Create text content
         text_content = f"""
@@ -114,7 +119,7 @@ class EmailService:
         
         {reminder_description}
         
-        This reminder was sent by {business.name}.
+        This reminder was sent by {sender_name}.
         """
         
         # Create HTML content
@@ -124,13 +129,13 @@ class EmailService:
                 <h2>Reminder: {reminder_title}</h2>
                 <p>{reminder_description}</p>
                 <br>
-                <p><em>This reminder was sent by {business.name}.</em></p>
+                <p><em>This reminder was sent by {sender_name}.</em></p>
             </body>
         </html>
         """
         
         return await EmailService.send_email(
-            business=business,
+            email_configuration=email_configuration,
             recipient_email=recipient_email,
             subject=subject,
             body=text_content,

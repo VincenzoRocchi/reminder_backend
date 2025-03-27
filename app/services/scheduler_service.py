@@ -1,3 +1,4 @@
+# app/services/scheduler_service.py
 import logging
 import asyncio
 from datetime import datetime, timedelta
@@ -7,16 +8,19 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 
 from app.database import SessionLocal
-from app.models.reminder import Reminder, NotificationType
-from app.models.notification import Notification, ReminderStatus
-from app.models.user import User
-from app.models.business import Business
+from app.models.reminders import Reminder, NotificationTypeEnum
+from app.models.notifications import Notification, NotificationStatusEnum
+from app.models.users import User
 from app.services.email_service import EmailService
-from app.services.sms_service import SMSService
-from app.services.whatsapp_service import WhatsAppService
+from app.services.twilio_service import TwilioService
+from app.models.emailConfigurations import EmailConfiguration
+from app.models.senderIdentities import SenderIdentity
+from app.models.clients import Client
+from app.models.reminderRecipient import ReminderRecipient
+from app.core.exceptions import ServiceError
+from app.core.settings import settings
 
 # Configure module-level logger for this service
-# This allows targeted log filtering and appropriate log levels
 logger = logging.getLogger(__name__)
 
 
@@ -30,12 +34,6 @@ class SchedulerService:
     - Sending notifications through multiple channels (email, SMS, WhatsApp)
     - Managing recurring reminders with various patterns
     - Updating reminder and notification statuses
-    
-    Design Decisions:
-    - Uses AsyncIOScheduler for non-blocking, efficient reminder processing
-    - Implements a singleton pattern to ensure only one scheduler is running
-    - Separates notification sending logic by channel type for maintainability
-    - Uses SQLAlchemy ORM for database interactions to abstract DB operations
     """
     
     def __init__(self):
@@ -45,8 +43,6 @@ class SchedulerService:
         Creates an AsyncIOScheduler instance but does not start it automatically.
         The scheduler must be explicitly started using the start() method.
         """
-        # Using AsyncIOScheduler for compatibility with asyncio-based applications
-        # This allows for non-blocking reminder processing
         self.scheduler = AsyncIOScheduler()
         
     def start(self):
@@ -56,12 +52,33 @@ class SchedulerService:
         Registers the process_reminders job to run at 1-minute intervals
         and activates the scheduler. This job frequency represents a balance
         between timely reminder delivery and system load.
+        
+        The scheduler will not start if:
+        1. DISABLE_SCHEDULER setting is True (any environment)
+        2. In testing environment only: No reminders are found in the database
         """
+        from app.core.settings import settings
+        
         logger.info("Starting reminder scheduler service")
         
+        # Check if scheduler should be disabled via configuration
+        if getattr(settings, "DISABLE_SCHEDULER", False):
+            logger.info("Scheduler disabled via DISABLE_SCHEDULER setting")
+            return
+        
+        # In testing environment, only start if there are reminders
+        if settings.ENV == "testing":
+            db = SessionLocal()
+            try:
+                reminder_count = db.query(Reminder).count()
+                if reminder_count == 0:
+                    logger.info("No reminders found in testing environment. Scheduler will not start.")
+                    return
+                logger.info(f"Found {reminder_count} reminders in testing environment. Starting scheduler.")
+            finally:
+                db.close()
+        
         # Add job to process reminders every minute
-        # IntervalTrigger ensures reliable execution at fixed intervals
-        # ID allows for job identification and replacement if needed
         self.scheduler.add_job(
             self.process_reminders,
             IntervalTrigger(minutes=1),
@@ -75,218 +92,282 @@ class SchedulerService:
     async def process_reminders(self):
         """
         Process reminders that are due to be sent.
-        
-        This method is the core business logic for reminder processing:
-        1. Retrieves active reminders that have reached their scheduled time
-        2. For each reminder, processes all pending notifications
-        3. Handles recurring reminders by calculating the next occurrence
-        4. Updates reminder and notification statuses
-        
-        Database transactions ensure data consistency even if errors occur.
         """
-        logger.info("Processing due reminders")
+        # In testing environment, check if we should log
+        should_log = settings.ENV != "testing"
         
-        # Create a new DB session for this processing cycle
-        # This ensures DB connection isolation and proper resource cleanup
+        if should_log:
+            logger.info("Processing due reminders")
+        
         db = SessionLocal()
         try:
-            # Get current time for comparison with reminder scheduled times
             now = datetime.now()
             
             # Find reminders that are due and active
-            # The dual filter ensures we only process relevant reminders
             due_reminders = (
                 db.query(Reminder)
                 .filter(
-                    Reminder.reminder_date <= now,  # Due or overdue reminders
-                    Reminder.is_active == True      # Only process active reminders
+                    Reminder.reminder_date <= now,
+                    Reminder.is_active == True
                 )
                 .all()
             )
             
-            # Process each due reminder individually
+            # Skip verbose logging in testing mode if no reminders found
+            if not due_reminders and settings.ENV == "testing":
+                return
+                
             for reminder in due_reminders:
-                # Get business info - we need to verify business is active
-                # This prevents sending reminders for deactivated businesses
-                business = db.query(Business).filter(Business.id == reminder.business_id).first()
-                if not business or not business.is_active:
-                    # Skip reminders for inactive businesses
-                    # This is a safeguard against notifications for decommissioned accounts
+                # Get the user who created the reminder
+                user = db.query(User).filter(User.id == reminder.user_id).first()
+                if not user or not user.is_active:
+                    logger.warning(f"Skipping reminder {reminder.id}: User {reminder.user_id} not found or inactive")
                     continue
                 
-                # Get pending notifications for this reminder
-                # We only process notifications that haven't been sent yet
-                pending_notifications = (
-                    db.query(Notification)
-                    .filter(
-                        Notification.reminder_id == reminder.id,
-                        Notification.status == ReminderStatus.PENDING
-                    )
+                # For email reminders, ensure we have a valid email configuration
+                email_configuration = None
+                if reminder.notification_type == NotificationTypeEnum.EMAIL:
+                    if reminder.email_configuration_id:
+                        email_configuration = db.query(EmailConfiguration).filter(
+                            EmailConfiguration.id == reminder.email_configuration_id,
+                            EmailConfiguration.user_id == user.id,
+                            EmailConfiguration.is_active == True
+                        ).first()
+                    
+                    if not email_configuration:
+                        logger.warning(f"Skipping reminder {reminder.id}: No active email configuration found")
+                        continue
+                
+                # Get sender identity if specified
+                sender_identity = None
+                if reminder.sender_identity_id:
+                    sender_identity = db.query(SenderIdentity).filter(
+                        SenderIdentity.id == reminder.sender_identity_id,
+                        SenderIdentity.user_id == user.id
+                    ).first()
+                    
+                    if not sender_identity:
+                        logger.warning(f"Reminder {reminder.id} specified sender_identity_id {reminder.sender_identity_id} which was not found")
+                
+                # Get all clients for this reminder
+                recipient_mappings = (
+                    db.query(ReminderRecipient)
+                    .filter(ReminderRecipient.reminder_id == reminder.id)
                     .all()
                 )
                 
-                # Process each pending notification for this reminder
-                for notification in pending_notifications:
-                    # Get recipient info - we need to verify recipient is active
-                    # This prevents sending to deactivated or removed users
-                    recipient = db.query(User).filter(User.id == notification.recipient_id).first()
-                    if not recipient or not recipient.is_active:
-                        # Skip notifications for inactive recipients
-                        continue
-                    
-                    # Send notification based on the configured channel type
-                    # This polymorphic approach allows flexible notification channels
-                    success = await self.send_notification(
-                        notification_type=notification.notification_type,
-                        recipient=recipient,
-                        reminder=reminder,
-                        business=business  # Pass business for branding/sender information
+                client_ids = [mapping.client_id for mapping in recipient_mappings]
+                clients = db.query(Client).filter(Client.id.in_(client_ids), Client.is_active == True).all()
+                
+                # Process each client
+                for client in clients:
+                    # Check if a notification already exists
+                    existing_notification = (
+                        db.query(Notification)
+                        .filter(
+                            Notification.reminder_id == reminder.id,
+                            Notification.client_id == client.id,
+                            Notification.status.in_([NotificationStatusEnum.PENDING, NotificationStatusEnum.SENT])
+                        )
+                        .first()
                     )
                     
-                    # Update notification status based on send result
-                    # This provides an audit trail of notification attempts
+                    # Skip if already processed
+                    if existing_notification and existing_notification.status == NotificationStatusEnum.SENT:
+                        continue
+                    
+                    # Create a new notification if one doesn't exist
+                    if not existing_notification:
+                        notification = Notification(
+                            reminder_id=reminder.id,
+                            client_id=client.id,
+                            notification_type=reminder.notification_type,
+                            message=reminder.description,
+                            status=NotificationStatusEnum.PENDING
+                        )
+                        db.add(notification)
+                        db.commit()
+                        db.refresh(notification)
+                    else:
+                        notification = existing_notification
+                    
+                    # Send the notification
+                    success = await self.send_notification(
+                        notification_type=reminder.notification_type,
+                        email_configuration=email_configuration,  # Only used for email
+                        sender_identity=sender_identity,
+                        user=user,
+                        client=client,
+                        reminder=reminder
+                    )
+                    
+                    # Update notification status
                     notification.sent_at = datetime.now()
                     if success:
-                        notification.status = ReminderStatus.SENT
+                        notification.status = NotificationStatusEnum.SENT
                     else:
-                        notification.status = ReminderStatus.FAILED
+                        notification.status = NotificationStatusEnum.FAILED
                         notification.error_message = "Failed to send notification"
                     
-                    # Mark notification for update in database
                     db.add(notification)
                 
                 # Handle recurring reminders
-                # If the reminder is configured to repeat, calculate the next occurrence
                 if reminder.is_recurring and reminder.recurrence_pattern:
-                    # Calculate the next reminder date based on pattern
                     next_date = self.calculate_next_reminder_date(
                         reminder.reminder_date, reminder.recurrence_pattern
                     )
                     if next_date:
-                        # Update reminder with new future date
                         reminder.reminder_date = next_date
                     else:
-                        # If pattern is invalid, deactivate to prevent endless retries
                         reminder.is_active = False
-                        logger.warning(
-                            f"Deactivating reminder {reminder.id} due to invalid recurrence pattern: "
-                            f"'{reminder.recurrence_pattern}'"
-                        )
                 else:
-                    # Non-recurring reminders are one-time only
-                    # Deactivate after processing to prevent duplicate sending
                     reminder.is_active = False
                 
-                # Mark reminder for update in database
                 db.add(reminder)
-            
-            # Commit all changes in a single transaction
-            # This ensures atomic updates and prevents partial state changes
+                
             db.commit()
             
         except Exception as e:
-            # Log detailed error information for troubleshooting
-            # This provides operational visibility for production monitoring
             logger.error(f"Error processing reminders: {str(e)}", exc_info=True)
-            
-            # No explicit rollback needed as it will happen in the finally block
-            # when the session is closed without a prior commit
         finally:
-            # Always close the DB session to prevent connection leaks
-            # This is crucial for long-running services to maintain DB health
             db.close()
-    
+            
     async def send_notification(
         self,
-        notification_type: NotificationType,
-        recipient: User,
-        reminder: Reminder,
-        business: Business  # Business context for the notification
+        notification_type: NotificationTypeEnum,
+        user,
+        client,
+        reminder,
+        email_configuration=None,
+        sender_identity=None,
     ) -> bool:
         """
-        Send a notification based on its configured channel type.
-        
-        This method routes the notification to the appropriate service
-        based on the notification type, ensuring proper formatting and
-        delivery for each channel.
+        Send a notification based on the specified type and details.
         
         Args:
-            notification_type: Channel to use (EMAIL, SMS, WHATSAPP)
-            recipient: User object containing contact information
-            reminder: Reminder details including title and description
-            business: Business object for sender information and branding
+            notification_type: Type of notification (EMAIL, SMS, WHATSAPP)
+            user: User sending the reminder
+            client: Client receiving the reminder
+            reminder: Reminder details
+            email_configuration: Configuration for sending emails (only used for EMAIL type)
+            sender_identity: Optional identity information for display to recipient
             
         Returns:
             True if notification was sent successfully, False otherwise
         """
         try:
-            # Route to appropriate notification service based on type
-            # Each channel has specific requirements and formatting
-            
-            if notification_type == NotificationType.EMAIL:
-                # Email notifications require a valid email address
-                if not recipient.email:
-                    logger.warning(
-                        f"Cannot send email notification: Missing email for user {recipient.id}"
-                    )
+            if notification_type == NotificationTypeEnum.EMAIL:
+                # For email, we use email configurations
+                if not client.email:
+                    logger.warning(f"Cannot send email notification: Missing email for client {client.id}")
                     return False
                 
-                # Use email service to format and send the message
-                # Await ensures we get the actual result before proceeding
+                if not email_configuration:
+                    logger.warning(f"Cannot send email: No email configuration for reminder {reminder.id}")
+                    return False
+                
                 return await EmailService.send_reminder_email(
-                    business=business,  # For email branding and sender info
-                    recipient_email=recipient.email,
+                    email_configuration=email_configuration,
+                    user=user,
+                    recipient_email=client.email,
                     reminder_title=reminder.title,
-                    reminder_description=reminder.description or "",  # Handle null description
+                    reminder_description=reminder.description or "",
+                    sender_identity=sender_identity
                 )
                 
-            elif notification_type == NotificationType.SMS:
-                # SMS notifications require a valid phone number
-                if not recipient.phone_number:
-                    logger.warning(
-                        f"Cannot send SMS notification: Missing phone number for user {recipient.id}"
-                    )
+            elif notification_type == NotificationTypeEnum.SMS:
+                # Determine which phone number to use for recipient
+                recipient_phone = None
+                if hasattr(client, 'preferred_contact_method') and client.preferred_contact_method == "SMS" and hasattr(client, 'secondary_phone_number') and client.secondary_phone_number:
+                    recipient_phone = client.secondary_phone_number
+                else:
+                    recipient_phone = client.phone_number
+                    
+                if not recipient_phone:
+                    logger.warning(f"Cannot send SMS notification: Missing phone number for client {client.id}")
                     return False
                 
-                # Use SMS service to format and send the text message
-                # Note: Not async - assumed to be a synchronous operation
-                return SMSService.send_reminder_sms(
-                    business=business,  # For sender identification
-                    recipient_phone=recipient.phone_number,
+                # Determine which phone number to use for sender (from number)
+                from_phone_number = None
+                
+                # First check if we have a sender identity with a PHONE type
+                if sender_identity and hasattr(sender_identity, 'identity_type') and sender_identity.identity_type == "PHONE":
+                    from_phone_number = sender_identity.value
+                    logger.info(f"Using sender identity phone {from_phone_number} for SMS")
+                # Fallback to user's phone number
+                elif hasattr(user, 'phone_number') and user.phone_number:
+                    from_phone_number = user.phone_number
+                    logger.info(f"Using user's phone number for SMS")
+                
+                if not from_phone_number:
+                    logger.error(f"Cannot send SMS notification: No sender phone number available")
+                    return False
+                
+                # Use the TwilioService to send SMS
+                return TwilioService.send_reminder_message(
+                    user=user,
+                    recipient_phone=recipient_phone,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
+                    from_phone_number=from_phone_number,
+                    sender_identity=sender_identity,
+                    channel="sms"
                 )
                 
-            elif notification_type == NotificationType.WHATSAPP:
-                # WhatsApp notifications require a valid phone number
-                if not recipient.phone_number:
-                    logger.warning(
-                        f"Cannot send WhatsApp notification: Missing phone number for user {recipient.id}"
-                    )
+            elif notification_type == NotificationTypeEnum.WHATSAPP:
+                # Determine which phone number to use for recipient
+                recipient_phone = None
+                if hasattr(client, 'preferred_contact_method') and client.preferred_contact_method == "WHATSAPP":
+                    if hasattr(client, 'whatsapp_phone_number') and client.whatsapp_phone_number:
+                        recipient_phone = client.whatsapp_phone_number
+                    elif hasattr(client, 'secondary_phone_number') and client.secondary_phone_number:
+                        recipient_phone = client.secondary_phone_number
+                    else:
+                        recipient_phone = client.phone_number
+                else:
+                    recipient_phone = client.phone_number
+                    
+                if not recipient_phone:
+                    logger.warning(f"Cannot send WhatsApp notification: Missing phone number for client {client.id}")
                     return False
                 
-                # Use WhatsApp service to format and send the message
-                # Await ensures we get the actual result before proceeding
-                return await WhatsAppService.send_reminder_whatsapp(
-                    business=business,  # For sender identification
-                    recipient_phone=recipient.phone_number,
+                # Determine which phone number to use for sender (from number)
+                from_phone_number = None
+                
+                # First check if we have a sender identity with a PHONE type
+                if sender_identity and hasattr(sender_identity, 'identity_type') and sender_identity.identity_type == "PHONE":
+                    from_phone_number = sender_identity.value
+                    logger.info(f"Using sender identity phone {from_phone_number} for WhatsApp")
+                # Fallback to user's phone number
+                elif hasattr(user, 'phone_number') and user.phone_number:
+                    from_phone_number = user.phone_number
+                    logger.info(f"Using user's phone number for WhatsApp")
+                
+                if not from_phone_number:
+                    logger.error(f"Cannot send WhatsApp notification: No sender phone number available")
+                    return False
+                
+                # Use the TwilioService to send WhatsApp
+                return TwilioService.send_reminder_message(
+                    user=user,
+                    recipient_phone=recipient_phone,
                     reminder_title=reminder.title,
                     reminder_description=reminder.description,
+                    from_phone_number=from_phone_number,
+                    sender_identity=sender_identity,
+                    channel="whatsapp"
                 )
             
-            # Handle unsupported notification types
             logger.error(f"Unsupported notification type: {notification_type}")
             return False
             
-        except Exception as e:
-            # Log detailed error for operational monitoring
-            # Capture service-specific failures for troubleshooting
-            logger.error(
-                f"Error sending {notification_type} notification: {str(e)}", 
-                exc_info=True
-            )
+        except ServiceError as se:
+            logger.error(f"Service error: {se.message}", exc_info=True)
             return False
-    
+        except Exception as e:
+            logger.error(f"Error sending {notification_type} notification: {str(e)}", exc_info=True)
+            return False
+        
     def calculate_next_reminder_date(self, current_date: datetime, pattern: str) -> datetime:
         """
         Calculate the next reminder date based on the recurrence pattern.
@@ -294,9 +375,6 @@ class SchedulerService:
         Supports various recurrence patterns including:
         - Simple periods: daily, weekly, monthly, yearly
         - Complex patterns: "every X days/weeks/months"
-        
-        Important business logic for recurring reminders, handling the
-        scheduling complexity for different time periods.
         
         Args:
             current_date: Base date to calculate from
@@ -318,7 +396,6 @@ class SchedulerService:
             
             elif pattern == 'monthly':
                 # Monthly calculation requires special handling for different month lengths
-                # This implementation handles month boundaries correctly
                 new_month = current_date.month + 1
                 new_year = current_date.year
                 
@@ -328,8 +405,6 @@ class SchedulerService:
                     new_year += 1
                 
                 # Handle month length differences
-                # Using 28 as a safe default to prevent invalid dates
-                # For more sophisticated handling, consider calendar libraries
                 day = min(current_date.day, 28)  # Simple handling for month lengths
                 
                 return current_date.replace(year=new_year, month=new_month, day=day)
@@ -357,7 +432,6 @@ class SchedulerService:
                             return current_date + timedelta(weeks=number)
                         elif unit in ('month', 'months'):
                             # Calculate multi-month increments
-                            # This handles year boundaries automatically
                             new_month = current_date.month + number
                             new_year = current_date.year
                             
@@ -381,16 +455,12 @@ class SchedulerService:
             
         except Exception as e:
             # Log detailed error for debugging
-            # This helps identify issues with specific recurrence patterns
             logger.error(f"Error calculating next reminder date: {str(e)}", exc_info=True)
             return None
         
     def __str__(self):
         """
         Provides a human-readable string representation of the scheduler service.
-        
-        Returns:
-            String with service status and job count for logging and debugging
         """
         status = "running" if hasattr(self, 'scheduler') and getattr(self.scheduler, 'running', False) else "stopped"
         job_count = len(self.scheduler.get_jobs()) if hasattr(self, 'scheduler') else 0
@@ -399,11 +469,6 @@ class SchedulerService:
     def __repr__(self):
         """
         Provides a detailed technical representation of the scheduler service.
-        
-        Used for debugging and development to quickly assess service state.
-        
-        Returns:
-            String with the object's technical representation including status
         """
         if hasattr(self, 'scheduler'):
             status = 'running' if getattr(self.scheduler, 'running', False) else 'stopped'
@@ -415,6 +480,4 @@ class SchedulerService:
 
 
 # Create a singleton instance
-# This ensures only one scheduler is running application-wide
-# All imports of this module will use the same scheduler instance
 scheduler_service = SchedulerService()

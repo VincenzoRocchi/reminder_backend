@@ -1,7 +1,8 @@
 import time
 from typing import Dict, List, Tuple
-from fastapi import Request, HTTPException, status
+from fastapi import Request, status
 from app.core.settings import settings
+from app.core.exceptions import AppException
 
 class RateLimiter:
     """
@@ -68,7 +69,21 @@ async def rate_limit_login(request: Request):
     client_ip = request.client.host
     
     if login_limiter.is_rate_limited(client_ip):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. Please try again later."
+        raise AppException(
+            message="Rate limit exceeded. Please try again later.",
+            code="RATE_LIMIT_EXCEEDED",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+async def rate_limit_signup(request: Request):
+    """
+    Rate limit middleware for signup endpoint.
+    """
+    client_ip = request.client.host
+    
+    if signup_limiter.is_rate_limited(client_ip):
+        raise AppException(
+            message="Too many signup attempts. Please try again later.",
+            code="SIGNUP_RATE_LIMIT_EXCEEDED",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
         )

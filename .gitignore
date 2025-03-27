@@ -14,6 +14,13 @@ test.db
 psw.txt
 pyproject.toml
 .vscode
+*.db
+secrets/
 
 # Virtual environments
 .venv
+
+# Environment files
+.env.development
+.env.testing
+.env.production

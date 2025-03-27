@@ -1,46 +1,43 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing import Optional, List
 from datetime import datetime
 
-
-# Base User schema with shared properties
 class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=255)
     email: EmailStr
-    full_name: str = Field(..., min_length=2, max_length=255)
+    first_name: Optional[str] = Field(None, max_length=255)
+    last_name: Optional[str] = Field(None, max_length=255)
+    business_name: Optional[str] = Field(None, max_length=255)
     phone_number: Optional[str] = Field(None, max_length=20)
-    is_active: Optional[bool] = True
+    is_active: bool = True
 
-
-# Schema for creating a user
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
 
-
-# Schema for updating a user
 class UserUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=255)
     email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, min_length=2, max_length=255)
+    first_name: Optional[str] = Field(None, max_length=255)
+    last_name: Optional[str] = Field(None, max_length=255)
+    business_name: Optional[str] = Field(None, max_length=255)
     phone_number: Optional[str] = Field(None, max_length=20)
-    is_active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=8)
+    is_active: Optional[bool] = None
 
-
-# Schema for user in DB
 class UserInDBBase(UserBase):
     id: int
     is_superuser: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
-
-# Schema for returning user data
 class User(UserInDBBase):
+    """Complete user model returned from API"""
     pass
 
-
-# Schema for user with password (for internal use)
-class UserInDB(UserInDBBase):
-    hashed_password: str
+class UserWithRelations(User):
+    """User model with relationships data"""
+    service_accounts_count: int = 0
+    clients_count: int = 0
+    reminders_count: int = 0

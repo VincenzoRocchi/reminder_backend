@@ -1,19 +1,25 @@
 from datetime import timedelta, datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from jose import jwt
+from jose import JWTError, jwt
 
 from app.core.rate_limiter import rate_limit_login
 from app.api.dependencies import get_current_user, oauth2_scheme
 from app.core.auth import authenticate_user
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_access_token, create_refresh_token, get_signing_key
 from app.core.settings import settings
-from app.core.exceptions import TokenExpiredError, TokenInvalidError
+from app.core.exceptions import (
+    TokenExpiredError, 
+    TokenInvalidError, 
+    AppException,
+    SecurityException
+)
 from app.core.token_blacklist import token_blacklist
 from app.database import get_db
 from app.schemas.token import Token
 from app.schemas.user import User
+from app.models.users import User as UserModel
 
 router = APIRouter()
 
@@ -26,10 +32,10 @@ def login_access_token(
     """
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+        raise AppException(
+            message="Incorrect username or password",
+            code="INVALID_CREDENTIALS",
+            status_code=status.HTTP_401_UNAUTHORIZED
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -54,7 +60,7 @@ def logout(
     """
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, get_signing_key(), algorithms=[settings.ALGORITHM]
         )
         jti = payload.get("jti")
         exp = payload.get("exp")
@@ -65,7 +71,7 @@ def logout(
             
         return {"detail": "Successfully logged out"}
     except JWTError:
-        return {"detail": "Invalid token"}
+        raise TokenInvalidError(message="Could not decode token")
 
 
 @router.post("/refresh", response_model=Token)
@@ -75,11 +81,6 @@ def refresh_token(
     """
     Get a new access token using refresh token
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(
             refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
@@ -88,19 +89,24 @@ def refresh_token(
         token_type: str = payload.get("token_type")
         
         if user_id is None or token_type != "refresh":
-            raise credentials_exception
+            raise TokenInvalidError(message="Invalid token type or missing user ID")
     except JWTError:
-        raise credentials_exception
+        raise TokenInvalidError(message="Could not decode token")
     
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_active:
-        raise credentials_exception
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise AppException(
+            message="User not found",
+            code="USER_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": create_access_token(
             data={"sub": str(user.id)}, expires_delta=access_token_expires
         ),
+        "refresh_token": refresh_token,  # Return the same refresh token
         "token_type": "bearer",
     }
 
@@ -111,3 +117,30 @@ def read_users_me(current_user: User = Depends(get_current_user)):
     Get current user information
     """
     return current_user
+
+
+@router.post("/verify-token")
+def verify_token(
+    token: str = Body(...),
+):
+    """
+    Verify if a token is valid and not blacklisted
+    """
+    try:
+        payload = jwt.decode(
+            token, get_signing_key(), algorithms=[settings.ALGORITHM]
+        )
+        jti = payload.get("jti")
+        
+        if jti and token_blacklist.is_blacklisted(jti):
+            raise TokenInvalidError(message="Token has been revoked")
+            
+        return {"valid": True, "user_id": payload.get("sub")}
+    except JWTError:
+        raise TokenInvalidError(message="Invalid token")
+    except Exception as e:
+        raise AppException(
+            message=f"Error verifying token: {str(e)}",
+            code="TOKEN_VERIFICATION_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

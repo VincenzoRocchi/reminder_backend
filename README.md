@@ -32,28 +32,99 @@ A comprehensive backend system for businesses (such as accounting firms) to mana
 
 ## Project Structure
 
-```plaintext
-reminder_app/
+```bash
+reminder_backend/
 ├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
-├── .env.example               # Example environment variables
+├── env/                       # Environment configuration directory
+│   ├── .env.example           # Example environment variables
+│   ├── .env.development       # Development environment variables
+│   ├── .env.testing           # Testing environment variables
+│   ├── .env.production        # Production environment variables
+│   └── README.md              # Environment setup instructions
 ├── docker-compose.yml         # Docker Compose configuration
 ├── Dockerfile                 # Docker configuration
 ├── main.py                    # Application entry point
 ├── alembic/                   # Database migrations
 ├── app/                       # Main application package
 │   ├── api/                   # API endpoints
+│   │   ├── endpoints/         # Route handlers by resource
+│   │   ├── dependencies.py    # API dependencies (auth, etc.)
+│   │   └── routes.py          # API router configuration
 │   ├── core/                  # Core functionality
-│   ├── models/                # Database models
-│   ├── schemas/               # Pydantic schemas
-│   └── services/              # External services integration
-│       ├── email_service.py   # Email notification service
-│       ├── sms_service.py     # SMS notification service
-│       ├── whatsapp_service.py # WhatsApp notification service
-│       └── scheduler_service.py # APScheduler integration for reminders
+│   │   ├── security/          # Authentication & authorization
+│   │   ├── encryption.py      # Data encryption utilities
+│   │   ├── exceptions.py      # Custom exception types
+│   │   └── settings/          # Environment-based configuration
+│   ├── models/                # SQLAlchemy ORM models
+│   │   ├── users.py           # User models
+│   │   ├── clients.py         # Client models
+│   │   ├── reminders.py       # Reminder models
+│   │   ├── notifications.py   # Notification models
+│   │   └── ...                # Other data models
+│   ├── repositories/          # Data access layer
+│   │   ├── user.py            # User data operations
+│   │   ├── client.py          # Client data operations
+│   │   ├── reminder.py        # Reminder data operations
+│   │   └── ...                # Other data repositories
+│   ├── schemas/               # Pydantic schemas for validation
+│   │   ├── users.py           # User schemas
+│   │   ├── clients.py         # Client schemas
+│   │   ├── reminders.py       # Reminder schemas
+│   │   └── ...                # Other schemas
+│   ├── services/              # Business logic & external integrations
+│   │   ├── user.py            # User service
+│   │   ├── client.py          # Client service
+│   │   ├── reminder.py        # Reminder service
+│   │   ├── email_service.py   # Email notification service
+│   │   ├── sms_service.py     # SMS notification service
+│   │   ├── whatsapp_service.py # WhatsApp notification service
+│   │   └── scheduler_service.py # APScheduler integration for reminders
+│   └── database.py            # Database connection and session management
 ├── scripts/                   # Utility scripts
 └── tests/                     # Test suite
 ```
+
+## Architecture
+
+The application follows a layered architecture with clear separation of concerns:
+
+### API Layer
+
+- **Endpoints**: Handle HTTP requests and responses
+- **Dependencies**: Shared components like authentication
+- **Routes**: API routing configuration
+
+### Service Layer
+
+- **Business Logic**: Core application functionality
+- **External Services**: Integration with email, SMS, etc.
+- **Scheduling**: Background tasks and reminder processing
+
+### Repository Layer
+
+- **Data Access**: Abstraction over database operations
+- **Query Logic**: Complex data retrieval patterns
+- **Transaction Management**: Ensuring data consistency
+
+### Model Layer
+
+- **Database Models**: SQLAlchemy ORM definitions
+- **Schemas**: Pydantic models for validation and serialization
+- **Domain Objects**: Business entities and relationships
+
+### Core Components
+
+- **Settings**: Environment-specific configuration
+- **Security**: Authentication, authorization, and encryption
+- **Exceptions**: Custom exception types and handling
+
+This architecture provides several benefits:
+
+- **Testability**: Each layer can be tested in isolation
+- **Maintainability**: Clear separation of concerns
+- **Scalability**: Modular design allows for easier scaling
+- **Security**: Centralized security controls and validation
 
 ## Deployment Architecture
 
@@ -90,217 +161,330 @@ Each business using the platform (such as accounting firms) will have their own 
 ### Prerequisites
 
 - Python 3.11+
-- MySQL database (or Docker for local development)
+- MySQL database (or SQLite for development/testing)
 - AWS account for production deployment
 - Twilio account (for SMS)
 - SMTP server (for Email)
 - WhatsApp Business API access
 - Stripe account (for payment processing)
 
-### Installation
+### Development Setup
 
-#### Option 1: Using uv (Recommended)
-
-uv is a fast Python package installer and resolver that can significantly speed up dependency installation.
-
-1. Install uv (if not already installed) [following these instructions](https://docs.astral.sh/uv/getting-started/installation):
-
-   ```bash
-   winget install --id=astral-sh.uv  -e
-   ```
-
-2. Clone the repository:
-
-   ```bash
-   git clone https://github.com/yourusername/reminder-app.git
-   cd reminder-app
-   ```
-
-3. Create and activate a virtual environment with uv:
-
-   ```bash
-   uv venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-4. Install dependencies:
-
-   ```bash
-   uv pip sync [requirements.txt]
-   ```
-
-5. Copy `.env.example` to `.env` and configure environment variables:
-
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-6. Run database migrations:
-
-   ```bash
-   alembic upgrade head
-   ```
-
-#### Option 2: Using pip
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/yourusername/reminder-app.git
-   cd reminder-app
-   ```
-
-2. Create a virtual environment:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Copy `.env.example` to `.env` and configure environment variables:
-
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-5. Run database migrations:
-
-   ```bash
-   alembic upgrade head
-   ```
-
-### Running the Application
-
-#### Development Mode
+#### 1. Clone the Repository
 
 ```bash
-python main.py
+git clone https://github.com/yourusername/reminder-backend.git
+cd reminder-backend
 ```
 
-or
+#### 2. Set Up a Virtual Environment
+
+Using venv:
 
 ```bash
-uvicorn app.main:app --reload
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-#### Using Docker
+Or using uv (faster):
 
 ```bash
-docker-compose up
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-### API Documentation
+#### 3. Install Dependencies
 
-Once the application is running, access the API documentation at:
+Using pip:\
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-## Testing
-
-Run tests with pytest:
-
-``` bash
-pytest
+```bash
+pip install -r requirements.txt
 ```
 
-## Database Migrations
+Or using uv (faster):
 
-Create a new migration:
-
-``` bash
-alembic revision --autogenerate -m "Description of changes"
+```bash
+uv pip sync requirements.txt
 ```
 
-Apply migrations:
+#### 4. Configure Environment
 
-``` bash
+```bash
+# Create development environment file
+cp env/.env.example env/.env.development
+
+# Edit with your development settings
+# Set SQLALCHEMY_DATABASE_URI to your database connection
+# For quick development: SQLALCHEMY_DATABASE_URI=sqlite:///./dev.db
+```
+
+#### 5. Run Migrations
+
+```bash
+# Set environment
+export ENV=development  # Linux/Mac
+set ENV=development     # Windows CMD
+$env:ENV = "development"  # PowerShell
+
+# Run migrations
 alembic upgrade head
 ```
 
---------------------------------------------# Security and Authentication Enhancements #-------------------------
-
-## Security Headers
-
-We've implemented a custom middleware that adds essential security headers to every API response:
-
-- **X-Content-Type-Options: nosniff** - Prevents browsers from interpreting files as a different MIME type than declared, reducing XSS risks
-- **X-Frame-Options: DENY** - Prevents our application from being embedded in iframes, protecting against clickjacking attacks
-- **X-XSS-Protection: 1; mode=block** - Enables browser's built-in XSS filtering capabilities
-- **Strict-Transport-Security** (Production Only) - Enforces HTTPS connections for increased transport security
-- **Content-Security-Policy** (Production Only) - Controls which resources the browser is allowed to load
-
-## Transport Security
-
-In production environments, the application automatically redirects all HTTP requests to HTTPS, ensuring all client-server communication is encrypted. This is implemented via FastAPI's HTTPSRedirectMiddleware.
-
-## Host Validation
-
-To prevent HTTP Host header attacks and DNS rebinding attacks, we've implemented TrustedHostMiddleware in production environments. This ensures that requests are only accepted from explicitly defined hosts.
-
-## Enhanced CORS Configuration
-
-We've improved Cross-Origin Resource Sharing (CORS) configuration by:
-
-- Using specific origins from settings instead of wildcard allowances
-- Explicitly listing allowed HTTP methods rather than allowing all methods
-- Restricting allowed headers to only those needed by the application
-- Configuring credentials handling properly based on environment requirements
-
-## Authentication Improvements
-
-The authentication system has been enhanced with:
-
-- **Refresh Token Support** - Implements the OAuth2 refresh token flow for improved user experience
-- **Token Blacklisting** - Prevents reuse of invalidated tokens, improving security after logout
-- **Token Versioning** - Supports future authentication scheme changes without breaking existing sessions
-- **Enhanced Validation** - Adds explicit checks for token expiration and validity
-
-## Data Protection
-
-Sensitive data protection has been improved with:
-
-- **Versioned Encryption** - Adds versioning to encrypted data to support future cryptographic upgrades
-- **Key Rotation Support** - Architecture supports cryptographic key rotation for long-term security
-- **Granular Exception Handling** - More specific error types for different security scenarios
-
-## Rate Limiting
-
-Authentication endpoints are now protected with rate limiting to prevent brute force attacks:
-
-- Login attempts are limited to prevent password guessing
-- Account creation is rate-limited to prevent abuse
-- Implements progressive delays for repeated failed attempts
-
-## Environment-Based Security
-
-Security features are applied contextually based on the environment:
-
-- Development environments maintain security while enabling debugging
-- Production environments enforce the strictest security controls
-- Testing environments allow for security testing without interference
-
-## Validation Settings
-
-The application supports two validation modes:
-
-- **Strict Validation** (default in production): All input validation rules are enforced
-- **Relaxed Validation** (optional in development): Validation warnings are logged but don't block operations
-
-To enable relaxed validation in development:
+#### 6. Start the Application
 
 ```bash
-# In your .env.development file
-STRICT_VALIDATION=False
+python main.py
+# Or directly with uvicorn:
+# uvicorn app.main:app --reload
 ```
-## License
 
-[MIT](LICENSE)
+### Testing Setup
+
+#### 1. Configure Testing Environment
+
+```bash
+# Create testing environment file
+cp env/.env.example env/.env.testing
+
+# Important settings for testing:
+# SQLALCHEMY_DATABASE_URI=sqlite:///./test.db
+# DISABLE_SCHEDULER=false  # Will only run if reminders exist
+```
+
+#### 2. Run Tests
+
+```bash
+# Set environment
+export ENV=testing  # Linux/Mac
+set ENV=testing     # Windows CMD
+$env:ENV = "testing"  # PowerShell
+
+# Run tests
+pytest
+```
+
+### Production Deployment
+
+#### 1. Configure Production Environment
+
+```bash
+# Create production environment file securely
+cp env/.env.example env/.env.production
+
+# Configure all required settings for production:
+# - Strong SECRET_KEY
+# - Production database credentials
+# - Stripe API keys
+# - Twilio credentials
+# - CORS settings
+# - SSL configuration
+```
+
+#### 2. Build and Deploy with Docker
+
+```bash
+# Build the Docker image
+docker build -t reminder-backend:latest .
+
+# Run with Docker
+docker run -p 8000:8000 --env-file env/.env.production reminder-backend:latest
+
+# Or use docker-compose
+docker-compose up -d
+```
+
+#### 3. Monitor Logs
+
+```bash
+# View container logs
+docker logs -f reminder-backend
+```
+
+## Environment Configuration
+
+The application uses environment-specific configuration files located in the `env/` directory:
+
+### Environment Types
+
+- **Development** (`ENV=development`): For local development with debugging features enabled
+- **Testing** (`ENV=testing`): For automated tests with SQLite and minimal external dependencies
+- **Production** (`ENV=production`): For deployed instances with security features and optimizations
+
+### Configuration Files
+
+Each environment has its own configuration file:
+
+- `env/.env.development` - Development environment settings
+- `env/.env.testing` - Testing environment settings
+- `env/.env.production` - Production environment settings
+
+### Setting Up Environment Files
+
+Create environment files from the example template:
+
+```bash
+# Create environment files from example
+cp env/.env.example env/.env.development
+cp env/.env.example env/.env.testing
+cp env/.env.example env/.env.production
+
+# Edit files with appropriate settings for each environment
+```
+
+### Key Configuration Settings
+
+Some important environment variables include:
+
+- **Database Connection**: `SQLALCHEMY_DATABASE_URI` or individual DB_* variables
+- **Security Keys**: `SECRET_KEY` for JWT tokens (unique per environment)
+- **API Configuration**: `API_V1_STR`, `CORS_ORIGINS`, etc.
+- **External Services**: Twilio, SMTP, Stripe credentials
+- **Scheduler Settings**: `DISABLE_SCHEDULER`, `SCHEDULER_TIMEZONE`
+- **Validation Mode**: `STRICT_VALIDATION` (True/False)
+
+### Running with a Specific Environment
+
+```bash
+# Set environment before running
+export ENV=development  # Linux/Mac
+set ENV=development     # Windows CMD
+$env:ENV = "development" # Windows PowerShell
+
+# Then run the application
+python main.py
+```
+
+Or specify directly when running:
+
+```bash
+ENV=development python main.py
+```
+
+## Scheduler Service
+
+The application includes a robust scheduler service for processing reminders automatically:
+
+### Scheduler Features
+
+- **Automatic Processing**: Checks for due reminders at regular intervals
+- **Smart Recurrence**: Handles various recurrence patterns (daily, weekly, monthly)
+- **Multi-channel Delivery**: Sends notifications via email, SMS, or WhatsApp
+- **Error Handling**: Robust error handling and retry mechanisms
+
+### Configuration Options
+
+The scheduler service can be configured through environment variables:
+
+```bash
+# Set timezone for scheduler operations
+SCHEDULER_TIMEZONE=UTC
+
+# Completely disable the scheduler (useful for certain testing scenarios)
+DISABLE_SCHEDULER=false
+```
+
+### Testing Mode Behavior
+
+In testing environments (`ENV=testing`), the scheduler has special behavior:
+
+- **Auto-Detection**: Checks for existing reminders before starting
+- **Smart Disable**: Automatically disables itself if no reminders exist
+- **Reduced Logging**: Minimizes log output for cleaner test runs
+- **Manual Override**: Can be completely disabled via `DISABLE_SCHEDULER=true`
+
+The scheduler implementation detects the testing environment and adjusts its behavior:
+
+```python
+# Example from scheduler_service.py
+def start(self):
+    """Start the scheduler service."""
+    logger.info("Starting reminder scheduler service")
+    
+    # Check if scheduler should be disabled via configuration
+    if getattr(settings, "DISABLE_SCHEDULER", False):
+        logger.info("Scheduler disabled via DISABLE_SCHEDULER setting")
+        return
+    
+    # In testing environment, only start if there are reminders
+    if settings.ENV == "testing":
+        db = SessionLocal()
+        try:
+            reminder_count = db.query(Reminder).count()
+            if reminder_count == 0:
+                logger.info("No reminders found in testing environment. Scheduler will not start.")
+                return
+            logger.info(f"Found {reminder_count} reminders in testing environment. Starting scheduler.")
+        finally:
+            db.close()
+            
+    # Continue with regular scheduler initialization...
+```
+
+This behavior makes testing more efficient by:
+
+- Preventing unnecessary background processing during tests
+- Reducing log noise in test output
+- Allowing control over scheduler behavior in different test scenarios
+
+### Scheduler Health Checks
+
+You can verify the scheduler is running correctly by:
+
+1. Checking the application logs for "Scheduler service started" message
+2. Monitoring the "Processing due reminders" log messages (every minute)
+3. Creating a test reminder with a date in the past and verifying it's processed
+
+## Code Architecture Details
+
+### Repository Pattern
+
+The application implements the Repository Pattern to separate data access logic from business logic:
+
+#### Repository Structure
+
+Each model has a corresponding repository class that handles all database operations:
+
+```python
+# Example repository method
+async def get_reminder_by_id(db: Session, reminder_id: int) -> Optional[Reminder]:
+    return db.query(Reminder).filter(Reminder.id == reminder_id).first()
+```
+
+This pattern provides several advantages:
+
+- **Abstraction**: Services don't need to know how data is stored or retrieved
+- **Testability**: Repositories can be mocked for service testing
+- **Maintainability**: Database queries are centralized and reusable
+
+#### Service-Repository Interaction
+
+Services use repositories to interact with the database:
+
+```python
+# Example service using repository
+async def process_reminder(reminder_id: int):
+    with db_session() as db:
+        reminder = await reminder_repository.get_reminder_by_id(db, reminder_id)
+        if reminder:
+            # Process the reminder...
+```
+
+#### Key Repository Methods
+
+Common methods implemented across repositories:
+
+- `create_*` - Create new records
+- `get_*_by_id` - Retrieve single records
+- `get_*_by_*` - Filter based on criteria
+- `list_*` - Retrieve collections with filtering/pagination
+- `update_*` - Update existing records
+- `delete_*` - Remove records
+
+### Service Implementation
+
+The service layer contains business logic and coordinates across multiple repositories:
+
+- **Stateless Services**: All functions are stateless and take explicit dependencies
+- **Transaction Management**: Services manage database transactions
+- **External Integration**: Services handle external API calls
+- **Error Handling**: Centralized error handling and retries
