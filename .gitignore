@@ -17,9 +17,5 @@ pyproject.toml
 *.db
 secrets/
 
-# Environment configuration
-env/*
-!env/env.example
-
 # Virtual environments
 .venv
