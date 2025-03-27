@@ -90,31 +90,37 @@ reminder_backend/
 The application follows a layered architecture with clear separation of concerns:
 
 ### API Layer
+
 - **Endpoints**: Handle HTTP requests and responses
 - **Dependencies**: Shared components like authentication
 - **Routes**: API routing configuration
 
 ### Service Layer
+
 - **Business Logic**: Core application functionality
 - **External Services**: Integration with email, SMS, etc.
 - **Scheduling**: Background tasks and reminder processing
 
 ### Repository Layer
+
 - **Data Access**: Abstraction over database operations
 - **Query Logic**: Complex data retrieval patterns
 - **Transaction Management**: Ensuring data consistency
 
 ### Model Layer
+
 - **Database Models**: SQLAlchemy ORM definitions
 - **Schemas**: Pydantic models for validation and serialization
 - **Domain Objects**: Business entities and relationships
 
 ### Core Components
+
 - **Settings**: Environment-specific configuration
 - **Security**: Authentication, authorization, and encryption
 - **Exceptions**: Custom exception types and handling
 
 This architecture provides several benefits:
+
 - **Testability**: Each layer can be tested in isolation
 - **Maintainability**: Clear separation of concerns
 - **Scalability**: Modular design allows for easier scaling
@@ -174,12 +180,14 @@ cd reminder-backend
 #### 2. Set Up a Virtual Environment
 
 Using venv:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 Or using uv (faster):
+
 ```bash
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
@@ -187,12 +195,14 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 #### 3. Install Dependencies
 
-Using pip:
+Using pip:\
+
 ```bash
 pip install -r requirements.txt
 ```
 
 Or using uv (faster):
+
 ```bash
 uv pip sync requirements.txt
 ```
@@ -305,7 +315,7 @@ The application uses environment-specific configuration files located in the `en
 Each environment has its own configuration file:
 
 - `env/.env.development` - Development environment settings
-- `env/.env.testing` - Testing environment settings 
+- `env/.env.testing` - Testing environment settings
 - `env/.env.production` - Production environment settings
 
 ### Setting Up Environment Files
@@ -354,7 +364,7 @@ ENV=development python main.py
 
 The application includes a robust scheduler service for processing reminders automatically:
 
-### Features
+### Scheduler Features
 
 - **Automatic Processing**: Checks for due reminders at regular intervals
 - **Smart Recurrence**: Handles various recurrence patterns (daily, weekly, monthly)
@@ -411,6 +421,7 @@ def start(self):
 ```
 
 This behavior makes testing more efficient by:
+
 - Preventing unnecessary background processing during tests
 - Reducing log noise in test output
 - Allowing control over scheduler behavior in different test scenarios
@@ -440,6 +451,7 @@ async def get_reminder_by_id(db: Session, reminder_id: int) -> Optional[Reminder
 ```
 
 This pattern provides several advantages:
+
 - **Abstraction**: Services don't need to know how data is stored or retrieved
 - **Testability**: Repositories can be mocked for service testing
 - **Maintainability**: Database queries are centralized and reusable
@@ -460,6 +472,7 @@ async def process_reminder(reminder_id: int):
 #### Key Repository Methods
 
 Common methods implemented across repositories:
+
 - `create_*` - Create new records
 - `get_*_by_id` - Retrieve single records
 - `get_*_by_*` - Filter based on criteria

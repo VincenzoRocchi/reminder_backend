@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.core.settings import get_settings
-from app.models.user import User
+from app.models.users import User
 from app.schemas.token import TokenData, TokenPayload
 from app.core.exceptions import (
     InvalidCredentialsError,
