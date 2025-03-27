@@ -130,4 +130,4 @@ async def register_user(
     """
     Register a new user without requiring existing authentication.
     """
-    return user_service.create_user(db, user_in=user_in, is_active=True, is_superuser=False)
+    return user_service.create_user(db, user_in=user_in)
