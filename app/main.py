@@ -90,6 +90,49 @@ async def startup_event():
         logger.critical(f"Production environment has {security_results['total_errors']} security issues")
         # In a real-world scenario, you might want to prevent startup in production
         # if critical security issues are found
+        
+    # Create default admin superuser if needed
+    from app.database import SessionLocal
+    from app.models.users import User
+    from app.core.security import get_password_hash
+    from sqlalchemy import or_
+    import os
+    
+    db = SessionLocal()
+    try:
+        # Check if admin superuser already exists
+        admin = db.query(User).filter(or_(User.username == "admin", User.email == "admin@example.com")).first()
+        if not admin:
+            logger.info("Creating default admin superuser")
+            # Create admin user directly in database
+            admin_password = "admin"
+            db_obj = User(
+                username="admin",
+                email="admin@example.com",
+                hashed_password=get_password_hash(admin_password),
+                first_name="Admin",
+                last_name="User",
+                business_name="Admin Business",
+                phone_number="+123456789",
+                is_active=True,
+                is_superuser=True  # Set as superuser
+            )
+            db.add(db_obj)
+            db.commit()
+            logger.info("Default admin superuser created successfully")
+            
+            # Write admin credentials to a file for reference
+            credentials_file = "admin_credentials.txt"
+            with open(credentials_file, "w") as f:
+                f.write(f"Admin Username: admin\n")
+                f.write(f"Admin Email: admin@example.com\n")
+                f.write(f"Admin Password: {admin_password}\n")
+            logger.info(f"Admin credentials written to {credentials_file}")
+    except Exception as e:
+        logger.error(f"Error creating default admin superuser: {str(e)}")
+        db.rollback()
+    finally:
+        db.close()
     
     # Import here to avoid circular imports
     from app.services.scheduler_service import scheduler_service

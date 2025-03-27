@@ -16,6 +16,7 @@ pyproject.toml
 .vscode
 *.db
 secrets/
+admin_credentials.txt
 
 # Virtual environments
 .venv

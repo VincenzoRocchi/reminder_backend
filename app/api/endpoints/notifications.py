@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
-from app.database import get_db
+from app.database import get_db_session as get_db
 from app.models.users import User as UserModel
 from app.models.notifications import NotificationStatusEnum
 from app.schemas.notifications import Notification, NotificationUpdate, NotificationDetail

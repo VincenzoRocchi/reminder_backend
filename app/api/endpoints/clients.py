@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
-from app.database import get_db
+from app.database import get_db_session as get_db
 from app.models.users import User as UserModel
 from app.schemas.clients import Client, ClientCreate, ClientUpdate, ClientDetail
 from app.core.exceptions import DatabaseError, AppException

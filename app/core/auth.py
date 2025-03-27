@@ -2,13 +2,14 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import datetime
 import logging
 
 from app.core.settings import settings
 from app.core.security import verify_password, get_signing_key
 from app.models.users import User
-from app.database import get_db
+from app.database import get_db_session as get_db
 from app.core import request_context
 from app.core.token_blacklist import is_token_blacklisted
 from app.core.exceptions import TokenInvalidError, TokenExpiredError, UserNotFoundError
@@ -93,17 +94,18 @@ async def get_current_user(
 
 def authenticate_user(db: Session, email: str, password: str):
     """
-    Authenticate a user by email and password.
+    Authenticate a user by email or username and password.
     
     Args:
         db: Database session
-        email: User email
+        email: User email or username
         password: User password
         
     Returns:
         User object if authentication successful, False otherwise
     """
-    user = db.query(User).filter(User.email == email).first()
+    # Check if the provided input is an email or username
+    user = db.query(User).filter(or_(User.email == email, User.username == email)).first()
     if not user or not verify_password(password, user.hashed_password):
         return False
     return user

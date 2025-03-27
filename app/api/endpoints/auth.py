@@ -16,7 +16,7 @@ from app.core.exceptions import (
     SecurityException
 )
 from app.core.token_blacklist import token_blacklist
-from app.database import get_db
+from app.database import get_db_session as get_db
 from app.schemas.token import Token
 from app.schemas.user import User
 from app.models.users import User as UserModel
@@ -34,7 +34,7 @@ def login_access_token(
     if not user:
         raise AppException(
             message="Incorrect username or password",
-            code="INVALID_CREDENTIALS",
+            error_code="INVALID_CREDENTIALS",
             status_code=status.HTTP_401_UNAUTHORIZED
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -97,7 +97,7 @@ def refresh_token(
     if not user:
         raise AppException(
             message="User not found",
-            code="USER_NOT_FOUND",
+            error_code="USER_NOT_FOUND",
             status_code=status.HTTP_404_NOT_FOUND
         )
     
@@ -141,6 +141,6 @@ def verify_token(
     except Exception as e:
         raise AppException(
             message=f"Error verifying token: {str(e)}",
-            code="TOKEN_VERIFICATION_ERROR",
+            error_code="TOKEN_VERIFICATION_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
