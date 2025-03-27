@@ -40,9 +40,21 @@ async def read_users(
     limit: int = 100,
 ):
     """
-    Retrieve users. Only superusers can access this endpoint.
+    Retrieve active users. Only superusers can access this endpoint.
     """
-    return user_service.get_users(db, skip=skip, limit=limit)
+    return user_service.get_active_users(db, skip=skip, limit=limit)
+
+@router.get("/all", response_model=List[User])
+async def read_all_users(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
+    skip: int = 0,
+    limit: int = 100,
+):
+    """
+    Retrieve all users including inactive ones. Only superusers can access this endpoint.
+    """
+    return user_service.get_all_users(db, skip=skip, limit=limit)
 
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 async def create_user(

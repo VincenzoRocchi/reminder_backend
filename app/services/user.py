@@ -195,6 +195,26 @@ class UserService:
         """
         return self.repository.get_active_users(db, skip=skip, limit=limit)
     
+    def get_all_users(
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[User]:
+        """
+        Get all users regardless of active status.
+        
+        Args:
+            db: Database session
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List[User]: List of all users
+        """
+        return self.repository.get_multi(db, skip=skip, limit=limit)
+    
     def get_superusers(self, db: Session) -> List[User]:
         """
         Get all superusers.
