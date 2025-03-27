@@ -43,7 +43,12 @@ class BaseAppSettings(BaseSettings):
         if self.SQLALCHEMY_DATABASE_URI:
             return self
         
-        # Only build a URI if we have all the required components
+        # Special case for SQLite
+        if self.DB_ENGINE == 'sqlite':
+            self.SQLALCHEMY_DATABASE_URI = f"sqlite:///{self.DB_NAME}"
+            return self
+        
+        # Only build a URI if we have all the required components for other database types
         if all([self.DB_HOST, self.DB_USER, self.DB_PASSWORD, self.DB_NAME, self.DB_PORT]):
             # Build the URI using the configured engine
             uri = f"{self.DB_ENGINE}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"

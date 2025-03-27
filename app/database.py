@@ -105,3 +105,8 @@ def get_db_session():
     """
     with get_db() as session:
         yield session
+
+# Initialize the engine and session maker when this module is imported
+from app.core.settings import settings
+engine = init_db(settings)
+init_sessionmaker(engine)

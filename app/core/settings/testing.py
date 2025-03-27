@@ -1,6 +1,6 @@
 # app/core/settings/testing.py
 from app.core.settings.base import BaseAppSettings
-from pydantic import field_validator, Field
+from pydantic import field_validator, Field, model_validator
 import os
 
 class TestingSettings(BaseAppSettings):
@@ -18,14 +18,14 @@ class TestingSettings(BaseAppSettings):
             )
         return v
     
-    # Validate database URI if explicitly provided
-    @field_validator('SQLALCHEMY_DATABASE_URI')
-    def validate_db_uri(cls, v):
-        if not v:
+    # Validate database configuration after all values are set
+    @model_validator(mode='after')
+    def validate_db_config(self) -> 'TestingSettings':
+        if not self.SQLALCHEMY_DATABASE_URI:
             raise ValueError(
                 "No database connection configured. Please set DB_ENGINE and DB_NAME in your .env.testing file."
             )
-        return v
+        return self
     
     # ------------------------------
     # SECURITY SETTINGS
@@ -49,29 +49,4 @@ class TestingSettings(BaseAppSettings):
                 "Testing environment must use a test-specific secret key. "
                 "Please set SECRET_KEY in your .env.testing file with a value starting with 'test-' or 'testing-'"
             )
-        return v
-    
-    # Token expiration validation for testing (looser settings)
-    @field_validator('ACCESS_TOKEN_EXPIRE_MINUTES')
-    def validate_access_token_expiration(cls, v):
-        if v < 5:  # Minimum 5 minutes for access tokens in testing
-            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be at least 5 minutes in testing")
-        if v > 120:  # Maximum 2 hours for access tokens in testing
-            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES should not exceed 120 minutes in testing")
-        return v
-    
-    @field_validator('REFRESH_TOKEN_EXPIRE_DAYS')
-    def validate_refresh_token_expiration(cls, v):
-        if v < 1:  # Minimum 1 day for refresh tokens in testing
-            raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS must be at least 1 day in testing")
-        if v > 90:  # Maximum 90 days for refresh tokens in testing
-            raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS should not exceed 90 days in testing")
-        return v
-    
-    @field_validator('PASSWORD_RESET_TOKEN_EXPIRE_MINUTES')
-    def validate_password_reset_expiration(cls, v):
-        if v < 5:  # Minimum 5 minutes for password reset in testing
-            raise ValueError("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES must be at least 5 minutes in testing")
-        if v > 120:  # Maximum 2 hours for password reset in testing
-            raise ValueError("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES should not exceed 120 minutes in testing")
         return v
