@@ -32,15 +32,15 @@ def check_user_exists(db: Session, email: str = None, username: str = None):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
 
-@router.get("/", response_model=List[User])
-async def read_users(
+@router.get("/active", response_model=List[User])
+async def read_active_users(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
     skip: int = 0,
     limit: int = 100,
 ):
     """
-    Retrieve active users. Only superusers can access this endpoint.
+    Retrieve active users only. Only superusers can access this endpoint.
     """
     return user_service.get_active_users(db, skip=skip, limit=limit)
 
