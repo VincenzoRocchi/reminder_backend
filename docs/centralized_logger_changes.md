@@ -3,7 +3,7 @@
 ## Centralized Logging Configuration
 
 - Created `app/core/logging_setup.py` with comprehensive configuration for different environments
-- Added structured JSON logging for production and readable formats for development 
+- Added structured JSON logging for production and readable formats for development
 - Implemented proper log rotation for production logs
 
 ## Global Exception Handlers
