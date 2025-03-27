@@ -1,78 +1,107 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import contextlib
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import QueuePool
+from app.core.settings.base import BaseAppSettings
+from contextlib import contextmanager
 from typing import Generator
-import os
+import logging
 
-from app.core.settings import settings
+logger = logging.getLogger(__name__)
 
-# Determine if using SQLite (for testing) or another database
-is_sqlite = settings.SQLALCHEMY_DATABASE_URI.startswith('sqlite')
-
-# Connection pool configuration - optimized for different database types
-engine_args = {
-    "echo": settings.SQL_ECHO,  # SQL query logging based on settings
-}
-
-# Add connection pooling options only for non-SQLite databases
-if not is_sqlite:
-    engine_args.update({
-        "pool_pre_ping": True,  # Enable connection health checks
-        "pool_recycle": 3600,   # Recycle connections after 1 hour
-        "pool_size": 10,        # Default connection pool size
-        "max_overflow": 20,     # Allow 20 connections beyond pool_size when needed
-        "pool_timeout": 30,     # Wait up to 30 seconds for a connection when pool is full
-    })
-
-# Create SQLAlchemy engine with appropriate configuration
-engine = create_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
-    **engine_args
-)
-
-# Create a session factory with optimal settings
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-    expire_on_commit=False  # Prevents additional DB queries after commit
-)
-
-# Create a base class for models
+# Create declarative base instance
 Base = declarative_base()
 
-
-# Dependency to get DB session with context management
-def get_db() -> Generator:
+def get_engine(settings: BaseAppSettings):
     """
-    Create a new database session for each request,
-    and close it when the request is done.
+    Create SQLAlchemy engine based on settings.
+    Handles different database engines (mysql+pymysql, postgresql, sqlite) appropriately.
+    """
+    if settings.SQLALCHEMY_DATABASE_URI:
+        # If URI is explicitly provided, use it
+        database_url = settings.SQLALCHEMY_DATABASE_URI
+    else:
+        if settings.DB_ENGINE == 'sqlite':
+            # Special case for SQLite
+            database_url = f"sqlite:///{settings.DB_NAME}"
+        else:
+            # For other databases (mysql+pymysql, postgresql, etc.)
+            database_url = f"{settings.DB_ENGINE}://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+            
+            # Add SSL for non-development environments
+            if settings.ENV != "development":
+                database_url += "?ssl=true"
+
+    # Configure engine based on database type
+    if settings.DB_ENGINE == 'sqlite':
+        # SQLite-specific configuration
+        engine = create_engine(
+            database_url,
+            echo=settings.SQL_ECHO,
+            connect_args={"check_same_thread": False}  # Allows SQLite to be used with multiple threads
+        )
+    else:
+        # Configuration for other databases (MySQL, PostgreSQL, etc.)
+        engine = create_engine(
+            database_url,
+            echo=settings.SQL_ECHO,
+            poolclass=QueuePool,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT
+        )
     
-    Returns:
-        Generator yielding the database session
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    return engine
 
+# Create engine instance
+engine = None
 
-# Context manager for when you need a DB session outside of FastAPI dependencies
-@contextlib.contextmanager
-def db_session():
+def init_db(settings: BaseAppSettings):
+    """Initialize database connection"""
+    global engine
+    engine = get_engine(settings)
+    
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+    
+    return engine
+
+# SessionLocal class will be used to create database sessions
+SessionLocal = None
+
+def init_sessionmaker(engine):
+    """Initialize session maker"""
+    global SessionLocal
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+@contextmanager
+def get_db() -> Generator:
     """
     Context manager for database sessions.
     Usage:
-        with db_session() as db:
-            # Use db session here
+        with get_db() as db:
+            db.query(...)
     """
+    if SessionLocal is None:
+        raise RuntimeError("Database session factory not initialized. Call init_sessionmaker first.")
+        
     db = SessionLocal()
     try:
         yield db
-    except Exception:
+        db.commit()
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
         db.rollback()
         raise
     finally:
         db.close()
+
+def get_db_session():
+    """
+    Dependency for FastAPI endpoints.
+    Usage:
+        @app.get("/items/")
+        def read_items(db: Session = Depends(get_db_session)):
+            ...
+    """
+    with get_db() as session:
+        yield session

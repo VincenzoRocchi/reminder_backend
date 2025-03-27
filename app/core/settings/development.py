@@ -49,6 +49,16 @@ class DevelopmentSettings(BaseAppSettings):
         return v
     
     # Validate that we're using a real database in development
+    @field_validator('DB_ENGINE')
+    def validate_db_engine(cls, v):
+        if v == 'sqlite':
+            raise ValueError(
+                "Development must use a proper database engine, (mysql+pymysql, postgresql), not SQLite. "
+                "SQLite is only for testing environment."
+            )
+        return v
+    
+    # Validate database URI if explicitly provided
     @field_validator('SQLALCHEMY_DATABASE_URI')
     def validate_db_uri(cls, v):
         if not v:
@@ -56,13 +66,4 @@ class DevelopmentSettings(BaseAppSettings):
                 "No database connection configured. Please set DB_HOST, DB_USER, "
                 "DB_PASSWORD, and DB_NAME in your .env.development file."
             )
-        
-        if v and 'sqlite' in v.lower():
-            raise ValueError("Development must use a real database, not SQLite")
         return v
-
-    # This is already correctly defined in your development.py file
-    USE_REDIS: bool = Field(
-        default=os.getenv("USE_REDIS", "False").lower() == "true",
-        description="Use Redis for token storage (if False, in-memory storage will be used)"
-    )

@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 
 # Get the environment - no need to load dotenv here, it's already loaded in __init__.py
-ENV = os.getenv("ENV", "development")
+ENV = os.getenv("ENV", "development").lower()
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     # DATABASE SETTINGS
     # ------------------------------
+    DB_ENGINE: str = Field(default=os.getenv("DB_ENGINE", "mysql+pymysql"), description="Database engine (e.g. mysql+pymysql, postgresql, sqlite)")
     DB_HOST: str = Field(default=os.getenv("DB_HOST", "localhost"), description="Database host")
     DB_PORT: int = Field(default=int(os.getenv("DB_PORT", "3306")), description="Standard MySQL port")
     DB_USER: str = Field(default=os.getenv("DB_USER", "root"), description="Database user")
@@ -44,9 +45,8 @@ class BaseAppSettings(BaseSettings):
         
         # Only build a URI if we have all the required components
         if all([self.DB_HOST, self.DB_USER, self.DB_PASSWORD, self.DB_NAME, self.DB_PORT]):
-            # Build the URI - we'll let the environment-specific settings
-            # decide whether to use it or enforce their own rules
-            uri = f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+            # Build the URI using the configured engine
+            uri = f"{self.DB_ENGINE}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
             
             # Add SSL for non-development environments
             if self.ENV != "development":
@@ -59,12 +59,26 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     # SECURITY SETTINGS
     # ------------------------------
-    SECRET_KEY: str = Field(default=os.getenv("SECRET_KEY", "your-secret-key-here"), description="Secret key for JWT token signing")
-    ALGORITHM: str = Field(default=os.getenv("ALGORITHM", "HS256"), description="Algorithm used for JWT token signing")
-    JWT_TOKEN_PREFIX: str = Field(default=os.getenv("JWT_TOKEN_PREFIX", "Bearer"), description="Prefix for Authorization header")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")), description="Access token expiration (in minutes)")
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")), description="Refresh token expiration (in days)")
-    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15")), description="Password reset token expiration (in minutes)")
+    SECRET_KEY: str = Field(
+        default=os.getenv("SECRET_KEY", "your-secret-key-here"), 
+        description="Secret key for JWT token signing. Must be at least 32 characters in production."
+    )
+    ALGORITHM: str = Field(
+        default=os.getenv("ALGORITHM", "HS256"), 
+        description="Algorithm used for JWT token signing"
+    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")), 
+        description="Access token expiration (in minutes). Default: 60 minutes"
+    )
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
+        default=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")), 
+        description="Refresh token expiration (in days). Default: 30 days"
+    )
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30")), 
+        description="Password reset token expiration (in minutes). Default: 30 minutes"
+    )
     
     # ------------------------------
     # TWILIO SETTINGS (SMS & WHATSAPP)
@@ -73,14 +87,6 @@ class BaseAppSettings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = Field(default=os.getenv("TWILIO_AUTH_TOKEN", ""), description="Twilio authentication token")
     # Each client will provide their own phone number when sending messages
     # No default phone number is stored in application settings
-    
-    # ------------------------------
-    # STRIPE SETTINGS (PAYMENT GATEWAY)
-    # ------------------------------
-    STRIPE_API_KEY: str = Field(default=os.getenv("STRIPE_API_KEY", ""), description="Stripe API key")
-    STRIPE_WEBHOOK_SECRET: str = Field(default=os.getenv("STRIPE_WEBHOOK_SECRET", ""), description="Stripe webhook secret")
-    PAYMENT_SUCCESS_URL: str = Field(default=os.getenv("PAYMENT_SUCCESS_URL", "http://localhost:3000/payment/success"), description="Redirect URL after successful payment")
-    PAYMENT_CANCEL_URL: str = Field(default=os.getenv("PAYMENT_CANCEL_URL", "http://localhost:3000/payment/cancel"), description="Redirect URL after canceled payment")
     
     # ------------------------------
     # ENVIRONMENT SETTINGS
@@ -209,12 +215,20 @@ class BaseAppSettings(BaseSettings):
         description="Whether to use Redis for tokens and caching (required in production, optional in development/testing)"
     )
     
+    @field_validator('USE_REDIS')
+    def validate_redis_usage(cls, v):
+        if v:
+            logger.info("Redis is enabled")
+        else:
+            logger.info("Using in-memory storage")
+        return v
+    
     # ------------------------------
     # PYDANTIC CONFIGURATION
     # ------------------------------
     # Only look in env directory
-    @classmethod
-    def _find_env_file(cls):
+    @staticmethod
+    def _find_env_file():
         env = os.getenv("ENV", "development")
         paths = [
             Path(f"env/.env.{env}"),
@@ -228,7 +242,7 @@ class BaseAppSettings(BaseSettings):
         return None
     
     model_config = ConfigDict(
-        env_file=_find_env_file.__func__(),
+        env_file=_find_env_file(),
         env_file_encoding="utf-8",
         extra="ignore"
     )

@@ -164,3 +164,27 @@ class NotificationNotFoundError(Exception):
 class ReminderRecipientNotFoundError(Exception):
     """Raised when a reminder recipient is not found."""
     pass
+
+class AuthError(Exception):
+    """Base class for authentication errors."""
+    pass
+
+class InvalidCredentialsError(AuthError):
+    """Raised when credentials are invalid."""
+    pass
+
+class TokenError(AuthError):
+    """Base class for token-related errors."""
+    pass
+
+class TokenExpiredError(TokenError):
+    """Raised when a token has expired."""
+    pass
+
+class TokenInvalidError(TokenError):
+    """Raised when a token is invalid."""
+    pass
+
+class UserNotFoundError(AuthError):
+    """Raised when a user is not found."""
+    pass

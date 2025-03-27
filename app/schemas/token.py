@@ -1,19 +1,22 @@
-from pydantic import BaseModel,ConfigDict
 from typing import Optional
+from pydantic import BaseModel
 
-class Token(BaseModel):
-    """
-    Schema for JWT token response
-    """
-    access_token: str
-    token_type: str
-    refresh_token: Optional[str] = None
-
+class TokenData(BaseModel):
+    sub: Optional[str] = None
 
 class TokenPayload(BaseModel):
-    """
-    Schema for JWT token payload
-    """
-    sub: Optional[int] = None
-    token_type: Optional[str] = None  # "access" or "refresh"
-    exp: Optional[int] = None
+    sub: str
+    exp: int
+    type: Optional[str] = None
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    refresh_token: Optional[str] = None
+
+class TokenRefresh(BaseModel):
+    refresh_token: str
+
+class PasswordReset(BaseModel):
+    token: str
+    new_password: str
