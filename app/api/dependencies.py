@@ -4,7 +4,7 @@ from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
-from app.database import get_db
+from app.database import get_db_session as get_db
 from app.core.settings import settings
 from app.models.users import User
 from app.schemas.token import TokenPayload

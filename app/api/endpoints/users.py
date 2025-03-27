@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_current_active_superuser
-from app.database import get_db
+from app.database import get_db_session as get_db
 from app.models.users import User as UserModel
 from app.schemas.user import User, UserCreate, UserUpdate, UserWithRelations
 from app.core.exceptions import AppException, InsufficientPermissionsError, SecurityException, DatabaseError
@@ -118,4 +118,4 @@ async def register_user(
     """
     Register a new user without requiring existing authentication.
     """
-    return user_service.create_user(db, user_in=user_in, is_active=True, is_superuser=False)
+    return user_service.create_user(db, user_in=user_in)
