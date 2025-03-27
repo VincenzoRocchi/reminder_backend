@@ -133,4 +133,4 @@ The necessary environment variables are set in the `.ebextensions/01_environment
 3. Restrict database access to EB security group
 4. Use private S3 buckets with appropriate permissions
 5. Rotate secrets regularly
-6. Configure proper logging and monitoring 
+6. Configure proper logging and monitoring
