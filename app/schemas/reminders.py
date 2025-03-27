@@ -61,11 +61,11 @@ class ReminderInDBBase(ReminderBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-class Reminder(ReminderInDBBase):
+class ReminderSchema(ReminderInDBBase):
     """Complete reminder model returned from API"""
     pass
 
-class ReminderDetail(Reminder):
+class ReminderDetail(ReminderSchema):
     """Reminder with client details"""
     clients: List[int]  # List of client IDs
     notifications_count: int = 0

@@ -6,13 +6,13 @@ from app.api.dependencies import get_current_user
 from app.database import get_db_session as get_db
 from app.models.users import User as UserModel
 from app.models.reminders import NotificationTypeEnum
-from app.schemas.reminders import Reminder, ReminderCreate, ReminderUpdate, ReminderDetail
+from app.schemas.reminders import ReminderSchema, ReminderCreate, ReminderUpdate, ReminderDetail
 from app.core.exceptions import AppException
 from app.services.reminder import reminder_service
 
 router = APIRouter()
 
-@router.get("/", response_model=List[Reminder])
+@router.get("/", response_model=List[ReminderSchema])
 async def read_reminders(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_user)],
@@ -126,3 +126,57 @@ async def send_reminder_now(
         "message": "Reminder queued for immediate sending",
         "reminder_id": reminder_id
     }
+
+@router.post("/{reminder_id}/clients", response_model=ReminderDetail)
+async def add_clients_to_reminder(
+    reminder_id: int,
+    client_ids: Annotated[List[int], Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+):
+    """
+    Add clients to an existing reminder.
+    
+    - **client_ids**: List of client IDs to add to the reminder
+    
+    Returns the updated reminder with client details.
+    """
+    reminder_service.add_clients_to_reminder(
+        db,
+        reminder_id=reminder_id,
+        client_ids=client_ids,
+        user_id=current_user.id
+    )
+    
+    return reminder_service.get_reminder_with_stats(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id
+    )
+
+@router.delete("/{reminder_id}/clients", response_model=ReminderDetail)
+async def remove_clients_from_reminder(
+    reminder_id: int,
+    client_ids: Annotated[List[int], Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+):
+    """
+    Remove clients from an existing reminder.
+    
+    - **client_ids**: List of client IDs to remove from the reminder
+    
+    Returns the updated reminder with client details.
+    """
+    reminder_service.remove_clients_from_reminder(
+        db,
+        reminder_id=reminder_id,
+        client_ids=client_ids,
+        user_id=current_user.id
+    )
+    
+    return reminder_service.get_reminder_with_stats(
+        db,
+        reminder_id=reminder_id,
+        user_id=current_user.id
+    )

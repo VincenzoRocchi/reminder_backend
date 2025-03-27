@@ -61,6 +61,30 @@ class NotificationRepository(BaseRepository[Notification, NotificationCreate, No
             self.model.client_id == client_id
         ).offset(skip).limit(limit).all()
     
+    def get_by_user_id(
+        self, 
+        db: Session, 
+        *, 
+        user_id: int,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Notification]:
+        """
+        Get all notifications for a user.
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List[Notification]: List of notifications
+        """
+        return db.query(self.model).filter(
+            self.model.user_id == user_id
+        ).offset(skip).limit(limit).all()
+    
     def get_by_status(
         self, 
         db: Session, 
@@ -133,6 +157,33 @@ class NotificationRepository(BaseRepository[Notification, NotificationCreate, No
             skip=skip,
             limit=limit
         )
+    
+    def get_by_user_id_and_status(
+        self, 
+        db: Session, 
+        *, 
+        user_id: int,
+        status: NotificationStatusEnum,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Notification]:
+        """
+        Get all notifications for a user with a specific status.
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            status: Notification status
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List[Notification]: List of notifications
+        """
+        return db.query(self.model).filter(
+            self.model.user_id == user_id,
+            self.model.status == status
+        ).offset(skip).limit(limit).all()
     
     def get_failed_notifications(
         self, 

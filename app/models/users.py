@@ -37,6 +37,7 @@ class User(Base):
     clients = relationship("Client", back_populates="user", cascade="all, delete-orphan")
     reminders = relationship("Reminder", back_populates="user", cascade="all, delete-orphan")
     sender_identities = relationship("SenderIdentity", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
     
     # Phone number encryption (using the same pattern as in Business model)
     @property

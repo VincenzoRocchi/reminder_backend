@@ -7,7 +7,7 @@ from app.repositories.client import client_repository
 from app.schemas.reminders import (
     ReminderCreate, 
     ReminderUpdate, 
-    Reminder, 
+    ReminderSchema,
     ReminderDetail,
     ReminderType,
     NotificationType
@@ -28,7 +28,7 @@ class ReminderService:
         self.repository = reminder_repository
         self.client_repository = client_repository
     
-    def get_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
+    def get_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> ReminderSchema:
         """
         Get a reminder by ID.
         
@@ -57,7 +57,7 @@ class ReminderService:
         limit: int = 100,
         active_only: bool = False,
         sender_identity_id: Optional[int] = None
-    ) -> List[Reminder]:
+    ) -> List[ReminderSchema]:
         """
         Get all reminders for a user.
         
@@ -73,15 +73,15 @@ class ReminderService:
             List[Reminder]: List of reminders
         """
         # Start with base query
-        query = db.query(Reminder).filter(Reminder.user_id == user_id)
+        query = db.query(ReminderSchema).filter(ReminderSchema.user_id == user_id)
         
         # Add active only filter if requested
         if active_only:
-            query = query.filter(Reminder.is_active == True)
+            query = query.filter(ReminderSchema.is_active == True)
             
         # Add sender identity filter if provided
         if sender_identity_id is not None:
-            query = query.filter(Reminder.sender_identity_id == sender_identity_id)
+            query = query.filter(ReminderSchema.sender_identity_id == sender_identity_id)
             
         # Return paginated results
         return query.offset(skip).limit(limit).all()
@@ -93,7 +93,7 @@ class ReminderService:
         user_id: int,
         limit: int = 100,
         active_only: bool = True
-    ) -> List[Reminder]:
+    ) -> List[ReminderSchema]:
         """
         Get upcoming reminders for a user.
         
@@ -119,7 +119,7 @@ class ReminderService:
         *, 
         user_id: int,
         active_only: bool = True
-    ) -> List[Reminder]:
+    ) -> List[ReminderSchema]:
         """
         Get recurring reminders for a user.
         
@@ -137,13 +137,158 @@ class ReminderService:
             active_only=active_only
         )
     
+    def add_clients_to_reminder(
+        self,
+        db: Session,
+        *,
+        reminder_id: int,
+        client_ids: List[int],
+        user_id: int
+    ) -> None:
+        """
+        Add clients to a reminder.
+        
+        Args:
+            db: Database session
+            reminder_id: Reminder ID
+            client_ids: List of client IDs to add
+            user_id: User ID for permission check
+        
+        Raises:
+            ReminderNotFoundError: If reminder not found
+            ClientNotFoundError: If any client not found
+        """
+        # Verify reminder exists and belongs to user
+        reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
+        
+        # Verify all clients exist and belong to user
+        for client_id in client_ids:
+            client = self.client_repository.get(db, id=client_id)
+            if not client or client.user_id != user_id:
+                raise ClientNotFoundError(f"Client with ID {client_id} not found")
+        
+        # Get existing client IDs for this reminder
+        from app.models.reminderRecipient import ReminderRecipient
+        existing_mappings = db.query(ReminderRecipient).filter(
+            ReminderRecipient.reminder_id == reminder_id
+        ).all()
+        existing_client_ids = {mapping.client_id for mapping in existing_mappings}
+        
+        # Determine which clients to add (avoid duplicates)
+        clients_to_add = [cid for cid in client_ids if cid not in existing_client_ids]
+        
+        # Add new clients
+        from app.schemas.reminderRecipient import ReminderRecipientCreate
+        from app.services.reminderRecipient import reminder_recipient_service
+        
+        for client_id in clients_to_add:
+            recipient_data = ReminderRecipientCreate(
+                reminder_id=reminder_id,
+                client_id=client_id
+            )
+            reminder_recipient_service.create_reminder_recipient(db, obj_in=recipient_data)
+    
+    def remove_clients_from_reminder(
+        self,
+        db: Session,
+        *,
+        reminder_id: int,
+        client_ids: List[int],
+        user_id: int
+    ) -> None:
+        """
+        Remove clients from a reminder.
+        
+        Args:
+            db: Database session
+            reminder_id: Reminder ID
+            client_ids: List of client IDs to remove
+            user_id: User ID for permission check
+        
+        Raises:
+            ReminderNotFoundError: If reminder not found
+        """
+        # Verify reminder exists and belongs to user
+        reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
+        
+        # Remove clients
+        from app.models.reminderRecipient import ReminderRecipient
+        db.query(ReminderRecipient).filter(
+            ReminderRecipient.reminder_id == reminder_id,
+            ReminderRecipient.client_id.in_(client_ids)
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+    
+    def set_reminder_clients(
+        self,
+        db: Session,
+        *,
+        reminder_id: int,
+        client_ids: List[int],
+        user_id: int
+    ) -> None:
+        """
+        Set the exact list of clients for a reminder.
+        Adds missing clients and removes extraneous ones.
+        
+        Args:
+            db: Database session
+            reminder_id: Reminder ID
+            client_ids: Complete list of client IDs that should be associated
+            user_id: User ID for permission check
+        
+        Raises:
+            ReminderNotFoundError: If reminder not found
+            ClientNotFoundError: If any client not found
+        """
+        # Verify reminder exists and belongs to user
+        reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
+        
+        # Verify all clients exist and belong to user
+        for client_id in client_ids:
+            client = self.client_repository.get(db, id=client_id)
+            if not client or client.user_id != user_id:
+                raise ClientNotFoundError(f"Client with ID {client_id} not found")
+        
+        # Get existing client IDs for this reminder
+        from app.models.reminderRecipient import ReminderRecipient
+        existing_mappings = db.query(ReminderRecipient).filter(
+            ReminderRecipient.reminder_id == reminder_id
+        ).all()
+        existing_client_ids = {mapping.client_id for mapping in existing_mappings}
+        
+        # Determine which clients to add and which to remove
+        clients_to_add = [cid for cid in client_ids if cid not in existing_client_ids]
+        clients_to_remove = [cid for cid in existing_client_ids if cid not in client_ids]
+        
+        # Add new clients
+        from app.schemas.reminderRecipient import ReminderRecipientCreate
+        from app.services.reminderRecipient import reminder_recipient_service
+        
+        for client_id in clients_to_add:
+            recipient_data = ReminderRecipientCreate(
+                reminder_id=reminder_id,
+                client_id=client_id
+            )
+            reminder_recipient_service.create_reminder_recipient(db, obj_in=recipient_data)
+        
+        # Remove clients no longer needed
+        if clients_to_remove:
+            db.query(ReminderRecipient).filter(
+                ReminderRecipient.reminder_id == reminder_id,
+                ReminderRecipient.client_id.in_(clients_to_remove)
+            ).delete(synchronize_session=False)
+        
+        db.commit()
+    
     def create_reminder(
         self, 
         db: Session, 
         *, 
         reminder_in: ReminderCreate,
         user_id: int
-    ) -> Reminder:
+    ) -> ReminderSchema:
         """
         Create a new reminder.
         
@@ -159,7 +304,8 @@ class ReminderService:
             ClientNotFoundError: If any client not found
             InvalidConfigurationError: If email/sender configuration is missing
         """
-        # Validate clients exist
+        # Validate clients exist - this is still needed even though we'll use add_clients_to_reminder
+        # later, because we want to fail early if any client doesn't exist
         client_ids = reminder_in.client_ids
         for client_id in client_ids:
             client = self.client_repository.get(db, id=client_id)
@@ -188,19 +334,13 @@ class ReminderService:
         from app.schemas.reminders import ReminderCreateDB
         db_reminder = self.repository.create(db, obj_in=ReminderCreateDB(**reminder_data))
         
-        # Create reminder-client associations
-        from app.schemas.reminderRecipient import ReminderRecipientCreate
-        from app.services.reminderRecipient import reminder_recipient_service
-        
-        for client_id in client_ids:
-            recipient_data = ReminderRecipientCreate(
-                reminder_id=db_reminder.id,
-                client_id=client_id
-            )
-            reminder_recipient_service.create_reminder_recipient(db, obj_in=recipient_data)
-        
-        # Refresh reminder to get the created associations
-        db.refresh(db_reminder)
+        # Add clients using the new method
+        self.add_clients_to_reminder(
+            db,
+            reminder_id=db_reminder.id,
+            client_ids=client_ids,
+            user_id=user_id
+        )
         
         # Return reminder with stats (including clients)
         return self.get_reminder_with_stats(db, reminder_id=db_reminder.id, user_id=user_id)
@@ -212,7 +352,7 @@ class ReminderService:
         reminder_id: int,
         user_id: int,
         reminder_in: ReminderUpdate | Dict[str, Any]
-    ) -> Reminder:
+    ) -> ReminderSchema:
         """
         Update a reminder.
         
@@ -250,13 +390,6 @@ class ReminderService:
         
         # Store client_ids for later processing
         should_update_clients = client_ids is not None
-            
-        # Only validate client IDs if they're being updated
-        if should_update_clients:
-            for client_id in client_ids:
-                client = self.client_repository.get(db, id=client_id)
-                if not client or client.user_id != user_id:
-                    raise ClientNotFoundError(f"Client with ID {client_id} not found")
         
         # Validate email configuration if notification type is EMAIL
         if notification_type_value == NotificationType.EMAIL:
@@ -283,30 +416,17 @@ class ReminderService:
         
         # Update client associations if needed
         if should_update_clients:
-            from app.schemas.reminderRecipient import ReminderRecipientCreate
-            from app.services.reminderRecipient import reminder_recipient_service
-            from app.models.reminderRecipient import ReminderRecipient
-            
-            # Delete existing associations
-            db.query(ReminderRecipient).filter(
-                ReminderRecipient.reminder_id == reminder_id
-            ).delete()
-            
-            # Create new associations
-            for client_id in client_ids:
-                recipient_data = ReminderRecipientCreate(
-                    reminder_id=reminder_id,
-                    client_id=client_id
-                )
-                reminder_recipient_service.create_reminder_recipient(db, obj_in=recipient_data)
-            
-            # Refresh reminder to get the updated associations
-            db.refresh(updated_reminder)
+            self.set_reminder_clients(
+                db,
+                reminder_id=reminder_id,
+                client_ids=client_ids,
+                user_id=user_id
+            )
             
         # Return reminder with stats (including clients)
         return self.get_reminder_with_stats(db, reminder_id=reminder_id, user_id=user_id)
     
-    def delete_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
+    def delete_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> ReminderSchema:
         """
         Delete a reminder.
         
@@ -354,7 +474,7 @@ class ReminderService:
         failed_count = len([n for n in reminder.notifications if n.status == "FAILED"])
         
         # Create ReminderDetail object
-        reminder_data = Reminder.model_validate(reminder).model_dump()
+        reminder_data = ReminderSchema.model_validate(reminder).model_dump()
         return ReminderDetail(
             **reminder_data,
             clients=client_ids,
@@ -371,7 +491,7 @@ class ReminderService:
         start_date: datetime,
         end_date: datetime,
         active_only: bool = True
-    ) -> List[Reminder]:
+    ) -> List[ReminderSchema]:
         """
         Get reminders within a date range for a user.
         

@@ -119,12 +119,27 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         else:
             update_data = obj_in.model_dump(exclude_unset=True)
             
+        # Handle password hashing
         if "password" in update_data:
             hashed_password = get_password_hash(update_data["password"])
             del update_data["password"]
             update_data["hashed_password"] = hashed_password
             
-        return super().update(db, db_obj=db_obj, obj_in=update_data)
+        # Handle phone_number specially due to encryption
+        # The property setter needs to be explicitly called for encryption to work
+        if "phone_number" in update_data:
+            phone_number = update_data.pop("phone_number")
+            db_obj.phone_number = phone_number
+            
+        # Update remaining fields using standard approach
+        for field in update_data:
+            if hasattr(db_obj, field):
+                setattr(db_obj, field, update_data[field])
+                
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
     
     def get_active_users(
         self, 

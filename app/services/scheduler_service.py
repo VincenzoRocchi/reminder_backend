@@ -157,6 +157,7 @@ class SchedulerService:
                     # Create a new notification if one doesn't exist
                     if not existing_notification:
                         notification = Notification(
+                            user_id=reminder.user_id,
                             reminder_id=reminder.id,
                             client_id=client.id,
                             notification_type=reminder.notification_type,
