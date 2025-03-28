@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.repositories.reminder import reminder_repository
 from app.repositories.client import client_repository
@@ -16,7 +16,8 @@ from app.schemas.reminders import (
 from app.core.exceptions import (
     ReminderNotFoundError,
     ClientNotFoundError,
-    InvalidConfigurationError
+    InvalidConfigurationError,
+    InvalidOperationError
 )
 
 class ReminderService:
@@ -304,7 +305,19 @@ class ReminderService:
         Raises:
             ClientNotFoundError: If any client not found
             InvalidConfigurationError: If email/sender configuration is missing
+            InvalidOperationError: If reminder date is not valid
         """
+        # Validate reminder date is in the future with minimum buffer
+        min_buffer = timedelta(minutes=5)
+        now = datetime.now()
+        min_allowed_time = now + min_buffer
+        
+        if reminder_in.reminder_date < now:
+            raise InvalidOperationError("Reminder date cannot be in the past")
+        
+        if reminder_in.reminder_date < min_allowed_time:
+            raise InvalidOperationError(f"Reminder must be scheduled at least 5 minutes in the future (current minimum: {min_allowed_time.isoformat()})")
+        
         # Validate clients exist - this is still needed even though we'll use add_clients_to_reminder
         # later, because we want to fail early if any client doesn't exist
         client_ids = reminder_in.client_ids
@@ -370,6 +383,7 @@ class ReminderService:
             ReminderNotFoundError: If reminder not found
             ClientNotFoundError: If any client not found
             InvalidConfigurationError: If email/sender configuration is missing
+            InvalidOperationError: If updated reminder date is not valid
         """
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
         
@@ -379,11 +393,25 @@ class ReminderService:
             notification_type_value = reminder_in.get("notification_type", reminder.notification_type)
             email_config_id = reminder_in.get("email_configuration_id", reminder.email_configuration_id)
             sender_id = reminder_in.get("sender_identity_id", reminder.sender_identity_id)
+            reminder_date = reminder_in.get("reminder_date")
         else:
             client_ids = getattr(reminder_in, "client_ids", None)
             notification_type_value = getattr(reminder_in, "notification_type", reminder.notification_type)
             email_config_id = getattr(reminder_in, "email_configuration_id", reminder.email_configuration_id)
             sender_id = getattr(reminder_in, "sender_identity_id", reminder.sender_identity_id)
+            reminder_date = getattr(reminder_in, "reminder_date", None)
+        
+        # Validate reminder date if it's being updated
+        if reminder_date is not None:
+            min_buffer = timedelta(minutes=5)
+            now = datetime.now()
+            min_allowed_time = now + min_buffer
+            
+            if reminder_date < now:
+                raise InvalidOperationError("Reminder date cannot be in the past")
+            
+            if reminder_date < min_allowed_time:
+                raise InvalidOperationError(f"Reminder must be scheduled at least 5 minutes in the future (current minimum: {min_allowed_time.isoformat()})")
         
         # Determine if notification type is changing
         notification_type_changed = (isinstance(reminder_in, dict) and "notification_type" in reminder_in) or \
