@@ -2,10 +2,10 @@ from typing import List, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, get_current_active_superuser
+from app.api.dependencies import get_current_user, get_current_active_superuser, get_current_user_allow_inactive
 from app.database import get_db_session as get_db
 from app.models.users import User as UserModel
-from app.schemas.user import User, UserCreate, UserUpdate, UserWithRelations
+from app.schemas.user import User, UserCreate, UserUpdate, UserWithRelations, UserStatusUpdate
 from app.core.exceptions import AppException, InsufficientPermissionsError, SecurityException, DatabaseError
 from app.services.user import user_service
 
@@ -131,3 +131,30 @@ async def register_user(
     Register a new user without requiring existing authentication.
     """
     return user_service.create_user(db, user_in=user_in)
+
+@router.patch("/{user_id}/status", response_model=User)
+async def update_user_status(
+    user_id: int,
+    status_update: Annotated[UserStatusUpdate, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user_allow_inactive)],
+):
+    """
+    Update a user's active status.
+    
+    This endpoint allows setting a user's active status explicitly,
+    which is more specific than the general update endpoint.
+    
+    Regular users can only modify their own status, while
+    superusers can modify any user's status.
+    
+    Special note: This endpoint is accessible to inactive users
+    so they can reactivate their accounts.
+    """
+    user = user_service.get_user(db, user_id=user_id)
+    
+    # Only allow updating yourself or if you're admin
+    if user.id != current_user.id and not current_user.is_superuser:
+        raise InsufficientPermissionsError(required_permission="superuser")
+    
+    return user_service.update_user_status(db, user_id=user_id, is_active=status_update.is_active)

@@ -4,6 +4,7 @@ from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import logging
 
+from app import __version__
 from app.core.settings import settings
 from app.api.routes import api_router
 from app.database import engine, Base
@@ -21,6 +22,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
+    description="Reminder App API for managing reminders, notifications, and sender identities",
+    version=__version__,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=settings.DOCS_URL,
     redoc_url=settings.REDOC_URL
@@ -72,14 +75,22 @@ def root():
     """
     Root endpoint to check if the API is running
     """
-    return {"message": "Welcome to the Reminder App API!"}
+    return {
+        "message": "Welcome to the Reminder App API!",
+        "version": __version__,
+        "docs_url": settings.DOCS_URL
+    }
 
 @app.get("/health")
 async def health_check():
     """
     Health check endpoint for monitoring systems
     """
-    return {"status": "healthy", "environment": settings.ENV}
+    return {
+        "status": "healthy",
+        "environment": settings.ENV,
+        "version": __version__
+    }
 
 # Register startup event to initialize services
 @app.on_event("startup")

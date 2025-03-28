@@ -36,8 +36,11 @@ def handle_exceptions(
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            # Filter out _transaction_id from kwargs if present
+            clean_kwargs = {k: v for k, v in kwargs.items() if k != '_transaction_id'}
+            
             try:
-                return func(*args, **kwargs)
+                return func(*args, **clean_kwargs)
             except AppException:
                 # If it's already an application exception, just re-raise it
                 if log_error:
@@ -100,9 +103,17 @@ def with_transaction(func: F) -> F:
         # Use the event transaction manager context
         with transactional_events(transaction_id):
             try:
-                # Add transaction_id to kwargs so it can be used by event emitters
-                kwargs['_transaction_id'] = transaction_id
-                result = func(*args, **kwargs)
+                # Only add _transaction_id to kwargs for event emitters that accept it
+                # We need to make a copy of kwargs to avoid modifying the original
+                event_kwargs = kwargs.copy()
+                event_kwargs['_transaction_id'] = transaction_id
+                
+                # Try to call with transaction_id first, fall back to original kwargs if it fails
+                try:
+                    result = func(*args, **event_kwargs)
+                except TypeError:
+                    # If function doesn't accept _transaction_id, call with original kwargs
+                    result = func(*args, **kwargs)
                 
                 # If the function didn't explicitly commit, do it now
                 if hasattr(db, 'commit') and not getattr(db, '_in_transaction', False):

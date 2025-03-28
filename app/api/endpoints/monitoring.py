@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.events.dispatcher import event_dispatcher
-from app.core.security import get_current_active_superuser
+from app.api.dependencies import get_current_active_superuser
 from app.schemas.user import User
 
 router = APIRouter()

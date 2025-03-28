@@ -132,7 +132,10 @@ async def handle_reminder_due(event: ReminderDueEvent) -> None:
 # Register all reminder handlers with the event dispatcher
 def register_handlers():
     """Register all reminder handlers with the event dispatcher"""
-    event_dispatcher.subscribe(ReminderCreatedEvent.event_type, handle_reminder_created)
-    event_dispatcher.subscribe(ReminderUpdatedEvent.event_type, handle_reminder_updated)
-    event_dispatcher.subscribe(ReminderDeletedEvent.event_type, handle_reminder_deleted)
-    event_dispatcher.subscribe_async(ReminderDueEvent.event_type, handle_reminder_due) 
+    event_dispatcher.subscribe("reminder.created", handle_reminder_created)
+    event_dispatcher.subscribe("reminder.updated", handle_reminder_updated)
+    event_dispatcher.subscribe("reminder.deleted", handle_reminder_deleted)
+    event_dispatcher.subscribe_async("reminder.due", handle_reminder_due)
+    # Also subscribe to "reminder.due_soon" and "reminder.overdue" events which use the same handler
+    event_dispatcher.subscribe_async("reminder.due_soon", handle_reminder_due)
+    event_dispatcher.subscribe_async("reminder.overdue", handle_reminder_due) 

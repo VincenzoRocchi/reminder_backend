@@ -12,7 +12,7 @@ class ReminderTypeEnum(str, enum.Enum):
     NOTIFICATION = "NOTIFICATION"
 
 class NotificationTypeEnum(str, enum.Enum):
-    """Enum for notification types"""
+    """Enum for notification delivery methods"""
     EMAIL = "EMAIL"
     SMS = "SMS"
     WHATSAPP = "WHATSAPP"
@@ -26,8 +26,12 @@ class Reminder(Base):
     description = Column(Text, nullable=True)
     reminder_type = Column(Enum(ReminderTypeEnum), nullable=False)
     notification_type = Column(Enum(NotificationTypeEnum), nullable=False)
+    
+    # Deprecated: Use sender_identity_id instead
     email_configuration_id = Column(Integer, ForeignKey("email_configurations.id"), nullable=True)
-    sender_identity_id = Column(Integer, ForeignKey("sender_identities.id"), nullable=True)
+    
+    # Required field for all reminders
+    sender_identity_id = Column(Integer, ForeignKey("sender_identities.id"), nullable=False)
     
     # Schedule information
     is_recurring = Column(Boolean, default=False)

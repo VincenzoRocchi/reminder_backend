@@ -206,6 +206,43 @@ class UserService:
         
         return deleted_user
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to update user status")
+    @with_event_emission(lambda service, db, user_id, is_active, result: create_user_updated_event(
+        user_id=result.id,
+        username=result.username,
+        email=result.email,
+        is_active=result.is_active,
+        is_superuser=result.is_superuser,
+        business_name=result.business_name
+    ))
+    def update_user_status(self, db: Session, *, user_id: int, is_active: bool) -> User:
+        """
+        Update a user's active status.
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            is_active: New active status
+            
+        Returns:
+            User: Updated user
+            
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        user = self.repository.get(db, id=user_id)
+        if not user:
+            raise UserNotFoundError(f"User with ID {user_id} not found")
+        
+        # Create an update with just the is_active field
+        user_update = UserUpdate(is_active=is_active)
+        
+        # Update the user
+        updated_user = self.repository.update(db, db_obj=user, obj_in=user_update)
+        
+        return updated_user
+    
     @handle_exceptions(error_message="Failed to get all users")
     def get_users(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[User]:
         """

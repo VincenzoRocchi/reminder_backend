@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 import enum
 
 from app.database import Base
+from app.models.reminders import NotificationTypeEnum
 
 class NotificationStatusEnum(str, enum.Enum):
     """Enum for notification status"""
@@ -20,8 +21,9 @@ class Notification(Base):
     reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=False)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     message = Column(Text, nullable=True)
-    notification_type = Column(Enum("EMAIL", "SMS", "WHATSAPP", name="notification_type_enum"), nullable=False)
+    notification_type = Column(Enum(NotificationTypeEnum), nullable=False)
     status = Column(Enum(NotificationStatusEnum), default=NotificationStatusEnum.PENDING)
+    sender_identity_id = Column(Integer, ForeignKey("sender_identities.id"), nullable=False)
     sent_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -31,6 +33,7 @@ class Notification(Base):
     user = relationship("User", back_populates="notifications")
     reminder = relationship("Reminder", back_populates="notifications")
     client = relationship("Client", back_populates="notifications")
+    sender_identity = relationship("SenderIdentity", back_populates="notifications")
     
     def __str__(self):
         return f"Notification: {self.notification_type} for Client {self.client_id} ({self.status})"

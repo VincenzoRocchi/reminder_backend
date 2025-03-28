@@ -191,11 +191,15 @@ def with_event_emission(event_factory: Callable[..., Event]) -> Callable:
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
+            # Create a clean version of kwargs without _transaction_id
+            clean_kwargs = {k: v for k, v in kwargs.items() if k != '_transaction_id'}
+            
             # Execute the original function
-            result = func(*args, **kwargs)
+            result = func(*args, **clean_kwargs)
             
             # Create the event and emit it
             try:
+                # Pass all kwargs including _transaction_id to the event factory
                 event = event_factory(*args, result, **kwargs)
                 emit_event_safely(event)
             except Exception as e:
@@ -223,11 +227,15 @@ def with_async_event_emission(event_factory: Callable[..., Event]) -> Callable:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
+            # Create a clean version of kwargs without _transaction_id
+            clean_kwargs = {k: v for k, v in kwargs.items() if k != '_transaction_id'}
+            
             # Execute the original function
-            result = await func(*args, **kwargs)
+            result = await func(*args, **clean_kwargs)
             
             # Create the event and emit it
             try:
+                # Pass all kwargs including _transaction_id to the event factory
                 event = event_factory(*args, result, **kwargs)
                 await emit_event_async_safely(event)
             except Exception as e:

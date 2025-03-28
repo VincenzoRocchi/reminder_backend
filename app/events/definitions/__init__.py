@@ -5,10 +5,17 @@ This package contains the definitions of all events used in the application,
 organized by domain.
 """
 
+from app.events.base import Event
 from .reminder_events import *
 from .notification_events import *
 from .client_events import *
-from .sender_identity_events import *
+from .sender_identity_events import (
+    create_sender_identity_created_event,
+    create_sender_identity_updated_event,
+    create_sender_identity_deleted_event,
+    create_sender_identity_verified_event,
+    create_default_sender_identity_set_event
+)
 from .user_events import *
 from .email_configuration_events import *
 
@@ -25,21 +32,23 @@ EVENT_TYPES = {
     "reminder.created": ReminderCreatedEvent,
     "reminder.updated": ReminderUpdatedEvent,
     "reminder.deleted": ReminderDeletedEvent,
-    "reminder.due_soon": ReminderDueSoonEvent,
-    "reminder.overdue": ReminderOverdueEvent,
+    "reminder.due_soon": ReminderDueEvent,
+    "reminder.overdue": ReminderDueEvent,
     
     # Notification events
-    "notification.created": NotificationCreatedEvent,
+    "notification.scheduled": NotificationScheduledEvent,
     "notification.sent": NotificationSentEvent,
-    "notification.delivered": NotificationDeliveredEvent,
+    "notification.delivered": NotificationSentEvent,
     "notification.failed": NotificationFailedEvent,
+    "notification.cancelled": NotificationCancelledEvent,
     
     # Sender identity events
-    "sender_identity.created": SenderIdentityCreatedEvent,
-    "sender_identity.updated": SenderIdentityUpdatedEvent,
-    "sender_identity.deleted": SenderIdentityDeletedEvent,
-    "sender_identity.verified": SenderIdentityVerifiedEvent,
-    "sender_identity.rejected": SenderIdentityRejectedEvent,
+    # These now use function-based event creation
+    "sender_identity.created": Event,
+    "sender_identity.updated": Event,
+    "sender_identity.deleted": Event,
+    "sender_identity.verified": Event,
+    "sender_identity.default_set": Event,
     
     # User events
     "user.created": UserCreatedEvent,
@@ -61,14 +70,13 @@ __all__ = [
     "ReminderCreatedEvent",
     "ReminderUpdatedEvent",
     "ReminderDeletedEvent",
-    "ReminderDueSoonEvent",
-    "ReminderOverdueEvent",
+    "ReminderDueEvent",
     
     # Notification events
-    "NotificationCreatedEvent",
+    "NotificationScheduledEvent",
     "NotificationSentEvent",
-    "NotificationDeliveredEvent",
     "NotificationFailedEvent",
+    "NotificationCancelledEvent",
     
     # Client events
     "ClientCreatedEvent",
@@ -77,12 +85,12 @@ __all__ = [
     "ClientAddedToReminderEvent",
     "ClientRemovedFromReminderEvent",
     
-    # Sender identity events
-    "SenderIdentityCreatedEvent",
-    "SenderIdentityUpdatedEvent",
-    "SenderIdentityDeletedEvent",
-    "SenderIdentityVerifiedEvent",
-    "SenderIdentityRejectedEvent",
+    # Sender identity events (function-based)
+    "create_sender_identity_created_event",
+    "create_sender_identity_updated_event",
+    "create_sender_identity_deleted_event",
+    "create_sender_identity_verified_event",
+    "create_default_sender_identity_set_event",
 
     # User events
     "UserCreatedEvent",

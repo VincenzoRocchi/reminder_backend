@@ -39,8 +39,8 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     # API SETTINGS
     # ------------------------------
-    API_V1_STR: str = Field(default="/api/v1", description="API v1 prefix")
-    PROJECT_NAME: str = Field(default="Reminder App API", description="Project name")
+    API_V1_STR: str = Field(default="/api/v2", description="API v2 prefix")
+    PROJECT_NAME: str = Field(default="Reminder App API v0.2.0", description="Project name")
     
     # ------------------------------
     # DATABASE SETTINGS

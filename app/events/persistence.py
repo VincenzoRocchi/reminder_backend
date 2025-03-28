@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker, Session
 
 from app.events.base import Event, EventMetadata
 from app.events.exceptions import EventSerializationError, EventDeserializationError
-from app.config import settings
+from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class StoredEvent(Base):
     event_type = Column(String(255), index=True)
     timestamp = Column(DateTime, index=True, default=datetime.utcnow)
     payload = Column(Text)
-    metadata = Column(Text)
+    event_metadata = Column(Text)
     processed = Column(Boolean, default=False, index=True)
     processing_attempts = Column(Integer, default=0)
     error = Column(Text, nullable=True)
@@ -90,18 +90,34 @@ def deserialize_event(event_data: Dict[str, Any]) -> Event:
         if event_type not in EVENT_TYPES:
             raise ValueError(f"Unknown event type: {event_type}")
             
-        event_class = EVENT_TYPES[event_type]
-        
         # Create metadata
         metadata_dict = event_data.get("metadata", {})
         metadata = EventMetadata(**metadata_dict)
         
-        # Create the event with payload
+        # Get payload data
         payload_dict = event_data.get("payload", {})
-        event = event_class(
-            metadata=metadata,
-            payload=payload_dict
-        )
+        
+        # For backwards compatibility with older sender_identity events
+        if event_type.startswith("sender_identity.") and not payload_dict and "data" in event_data:
+            payload_dict = event_data.get("data", {})
+        
+        # Create the event
+        event_class = EVENT_TYPES[event_type]
+        
+        # Handle both class-based and function-based events
+        if event_type.startswith("sender_identity."):
+            # For sender identity events, we directly use the Event class
+            event = Event(
+                event_type=event_type,
+                metadata=metadata,
+                payload=payload_dict
+            )
+        else:
+            # For other events that use class-based approach
+            event = event_class(
+                metadata=metadata,
+                payload=payload_dict
+            )
         
         return event
     except Exception as e:
@@ -125,7 +141,9 @@ class EventStore:
         Args:
             db_url: Database connection URL. If not provided, uses the configured event store URL.
         """
-        self.db_url = db_url or settings.EVENT_STORE_URL
+        # Use provided URL, or settings URL, or default to SQLite for event store
+        self.db_url = db_url or getattr(settings, "EVENT_STORE_URL", None) or "sqlite:///events.db"
+        logger.debug(f"Initializing event store with URL: {self.db_url}")
         self.engine = create_engine(self.db_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         
@@ -153,7 +171,7 @@ class EventStore:
                 event_type=event.event_type,
                 timestamp=event.metadata.timestamp,
                 payload=json.dumps(event_data["payload"]),
-                metadata=json.dumps(event_data["metadata"]),
+                event_metadata=json.dumps(event_data["metadata"]),
                 processed=False
             )
             
@@ -207,7 +225,7 @@ class EventStore:
                 try:
                     event_data = {
                         "event_type": stored_event.event_type,
-                        "metadata": json.loads(stored_event.metadata),
+                        "metadata": json.loads(stored_event.event_metadata),
                         "payload": json.loads(stored_event.payload)
                     }
                     
@@ -245,7 +263,7 @@ class EventStore:
                 try:
                     event_data = {
                         "event_type": stored_event.event_type,
-                        "metadata": json.loads(stored_event.metadata),
+                        "metadata": json.loads(stored_event.event_metadata),
                         "payload": json.loads(stored_event.payload)
                     }
                     
@@ -290,7 +308,7 @@ class EventStore:
                 try:
                     event_data = {
                         "event_type": stored_event.event_type,
-                        "metadata": json.loads(stored_event.metadata),
+                        "metadata": json.loads(stored_event.event_metadata),
                         "payload": json.loads(stored_event.payload)
                     }
                     

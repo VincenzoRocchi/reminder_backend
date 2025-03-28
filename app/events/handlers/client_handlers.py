@@ -109,8 +109,8 @@ def handle_client_removed_from_reminder(event: ClientRemovedFromReminderEvent) -
 # Register all client handlers with the event dispatcher
 def register_handlers():
     """Register all client handlers with the event dispatcher"""
-    event_dispatcher.subscribe(ClientCreatedEvent.event_type, handle_client_created)
-    event_dispatcher.subscribe(ClientUpdatedEvent.event_type, handle_client_updated)
-    event_dispatcher.subscribe(ClientDeletedEvent.event_type, handle_client_deleted)
-    event_dispatcher.subscribe(ClientAddedToReminderEvent.event_type, handle_client_added_to_reminder)
-    event_dispatcher.subscribe(ClientRemovedFromReminderEvent.event_type, handle_client_removed_from_reminder) 
+    event_dispatcher.subscribe("client.created", handle_client_created)
+    event_dispatcher.subscribe("client.updated", handle_client_updated)
+    event_dispatcher.subscribe("client.deleted", handle_client_deleted)
+    event_dispatcher.subscribe("client.added_to_reminder", handle_client_added_to_reminder)
+    event_dispatcher.subscribe("client.removed_from_reminder", handle_client_removed_from_reminder) 

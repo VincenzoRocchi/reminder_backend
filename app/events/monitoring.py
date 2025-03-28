@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.events.dispatcher import event_dispatcher
 from app.events.persistence import event_store, StoredEvent
-from app.api.deps import get_current_admin_user
+
+from app.api.dependencies import get_current_active_superuser
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 monitoring_router = APIRouter(
     prefix="/monitoring/events",
     tags=["monitoring"],
-    dependencies=[Depends(get_current_admin_user)]
+    dependencies=[Depends(get_current_active_superuser)]
 )
 
 @monitoring_router.get("/metrics")

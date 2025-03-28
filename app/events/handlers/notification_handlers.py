@@ -91,7 +91,9 @@ def handle_notification_cancelled(event: NotificationCancelledEvent) -> None:
 # Register all notification handlers with the event dispatcher
 def register_handlers():
     """Register all notification handlers with the event dispatcher"""
-    event_dispatcher.subscribe(NotificationScheduledEvent.event_type, handle_notification_scheduled)
-    event_dispatcher.subscribe(NotificationSentEvent.event_type, handle_notification_sent)
-    event_dispatcher.subscribe(NotificationFailedEvent.event_type, handle_notification_failed)
-    event_dispatcher.subscribe(NotificationCancelledEvent.event_type, handle_notification_cancelled) 
+    event_dispatcher.subscribe("notification.scheduled", handle_notification_scheduled)
+    event_dispatcher.subscribe("notification.sent", handle_notification_sent)
+    event_dispatcher.subscribe("notification.failed", handle_notification_failed)
+    event_dispatcher.subscribe("notification.cancelled", handle_notification_cancelled)
+    # Also handle notification.delivered using the same handler as notification.sent
+    event_dispatcher.subscribe("notification.delivered", handle_notification_sent) 

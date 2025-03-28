@@ -15,215 +15,210 @@ class SenderIdentityData(BaseModel):
     """Base data model for sender identity event payloads"""
     identity_id: int
     user_id: int
-    identity_type: str  # EMAIL, PHONE
+    identity_type: str  # EMAIL, PHONE, WHATSAPP
     value: str  # The email address or phone number
     display_name: Optional[str] = None
     is_verified: Optional[bool] = None
     is_default: Optional[bool] = None
+    email_configuration_id: Optional[int] = None
 
-class SenderIdentityCreatedEvent(Event[SenderIdentityData]):
-    """Event emitted when a new sender identity is created"""
-    event_type: str = "sender_identity.created"
-
-class SenderIdentityUpdatedEvent(Event[SenderIdentityData]):
-    """Event emitted when a sender identity is updated"""
-    event_type: str = "sender_identity.updated"
-
-class SenderIdentityDeletedEvent(Event[SenderIdentityData]):
-    """Event emitted when a sender identity is deleted"""
-    event_type: str = "sender_identity.deleted"
-
-class SenderIdentityVerifiedEvent(Event[SenderIdentityData]):
-    """Event emitted when a sender identity is verified"""
-    event_type: str = "sender_identity.verified"
-
-class DefaultSenderIdentitySetEvent(Event[SenderIdentityData]):
-    """Event emitted when a sender identity is set as default"""
-    event_type: str = "sender_identity.default_set"
-
-# Factory functions for creating events with convenience
+# Event creation functions
 def create_sender_identity_created_event(
     identity_id: int,
     user_id: int,
     identity_type: str,
     value: str,
-    display_name: str,
+    display_name: str = "",
     is_verified: bool = False,
     is_default: bool = False,
-    metadata: Optional[EventMetadata] = None
-) -> SenderIdentityCreatedEvent:
+    email_configuration_id: Optional[int] = None
+) -> Event:
     """
-    Create a SenderIdentityCreatedEvent with the given data
+    Create an event for a new sender identity being created.
     
     Args:
-        identity_id: ID of the created sender identity
-        user_id: ID of the user who owns the sender identity
-        identity_type: Type of identity (EMAIL, PHONE)
+        identity_id: ID of the sender identity
+        user_id: User ID
+        identity_type: Type of identity (EMAIL, PHONE, WHATSAPP)
         value: The email address or phone number
-        display_name: The display name for the sender identity
+        display_name: How it appears to recipients
         is_verified: Whether the identity is verified
-        is_default: Whether the identity is set as default
-        metadata: Optional event metadata
+        is_default: Whether it's the default for its type
+        email_configuration_id: ID of associated email configuration (for EMAIL type)
         
     Returns:
-        SenderIdentityCreatedEvent instance
+        Event: The created event
     """
-    payload = SenderIdentityData(
-        identity_id=identity_id,
-        user_id=user_id,
-        identity_type=identity_type,
-        value=value,
-        display_name=display_name,
-        is_verified=is_verified,
-        is_default=is_default
+    return Event(
+        event_type="sender_identity.created",
+        metadata=EventMetadata(
+            user_id=user_id,
+            entity_id=identity_id,
+            entity_type="sender_identity"
+        ),
+        payload=SenderIdentityData(
+            identity_id=identity_id,
+            user_id=user_id,
+            identity_type=identity_type,
+            value=value,
+            display_name=display_name,
+            is_verified=is_verified,
+            is_default=is_default,
+            email_configuration_id=email_configuration_id
+        )
     )
-    
-    if metadata is None:
-        metadata = EventMetadata(user_id=user_id)
-    
-    return SenderIdentityCreatedEvent(payload=payload, metadata=metadata)
 
 def create_sender_identity_updated_event(
     identity_id: int,
     user_id: int,
     identity_type: str,
     value: str,
-    display_name: Optional[str] = None,
-    is_verified: Optional[bool] = None,
-    is_default: Optional[bool] = None,
-    metadata: Optional[EventMetadata] = None
-) -> SenderIdentityUpdatedEvent:
+    display_name: str = "",
+    is_verified: bool = False,
+    is_default: bool = False,
+    email_configuration_id: Optional[int] = None
+) -> Event:
     """
-    Create a SenderIdentityUpdatedEvent with the given data
+    Create an event for a sender identity being updated.
     
     Args:
-        identity_id: ID of the updated sender identity
-        user_id: ID of the user who owns the sender identity
-        identity_type: Type of identity (EMAIL, PHONE)
+        identity_id: ID of the sender identity
+        user_id: User ID
+        identity_type: Type of identity (EMAIL, PHONE, WHATSAPP)
         value: The email address or phone number
-        display_name: Optional updated display name
-        is_verified: Optional updated verification status
-        is_default: Optional updated default status
-        metadata: Optional event metadata
+        display_name: How it appears to recipients
+        is_verified: Whether the identity is verified
+        is_default: Whether it's the default for its type
+        email_configuration_id: ID of associated email configuration (for EMAIL type)
         
     Returns:
-        SenderIdentityUpdatedEvent instance
+        Event: The created event
     """
-    payload = SenderIdentityData(
-        identity_id=identity_id,
-        user_id=user_id,
-        identity_type=identity_type,
-        value=value,
-        display_name=display_name,
-        is_verified=is_verified,
-        is_default=is_default
+    return Event(
+        event_type="sender_identity.updated",
+        metadata=EventMetadata(
+            user_id=user_id,
+            entity_id=identity_id,
+            entity_type="sender_identity"
+        ),
+        payload=SenderIdentityData(
+            identity_id=identity_id,
+            user_id=user_id,
+            identity_type=identity_type,
+            value=value,
+            display_name=display_name,
+            is_verified=is_verified,
+            is_default=is_default,
+            email_configuration_id=email_configuration_id
+        )
     )
-    
-    if metadata is None:
-        metadata = EventMetadata(user_id=user_id)
-    
-    return SenderIdentityUpdatedEvent(payload=payload, metadata=metadata)
 
 def create_sender_identity_deleted_event(
     identity_id: int,
     user_id: int,
     identity_type: str,
     value: str,
-    metadata: Optional[EventMetadata] = None
-) -> SenderIdentityDeletedEvent:
+    display_name: str = ""
+) -> Event:
     """
-    Create a SenderIdentityDeletedEvent with the given data
+    Create an event for a sender identity being deleted.
     
     Args:
-        identity_id: ID of the deleted sender identity
-        user_id: ID of the user who owned the sender identity
-        identity_type: Type of identity (EMAIL, PHONE)
+        identity_id: ID of the sender identity
+        user_id: User ID
+        identity_type: Type of identity (EMAIL, PHONE, WHATSAPP)
         value: The email address or phone number
-        metadata: Optional event metadata
+        display_name: How it appears to recipients
         
     Returns:
-        SenderIdentityDeletedEvent instance
+        Event: The created event
     """
-    payload = SenderIdentityData(
-        identity_id=identity_id,
-        user_id=user_id,
-        identity_type=identity_type,
-        value=value
+    return Event(
+        event_type="sender_identity.deleted",
+        metadata=EventMetadata(
+            user_id=user_id,
+            entity_id=identity_id,
+            entity_type="sender_identity"
+        ),
+        payload=SenderIdentityData(
+            identity_id=identity_id,
+            user_id=user_id,
+            identity_type=identity_type,
+            value=value,
+            display_name=display_name
+        )
     )
-    
-    if metadata is None:
-        metadata = EventMetadata(user_id=user_id)
-    
-    return SenderIdentityDeletedEvent(payload=payload, metadata=metadata)
 
 def create_sender_identity_verified_event(
     identity_id: int,
     user_id: int,
     identity_type: str,
     value: str,
-    display_name: str,
-    metadata: Optional[EventMetadata] = None
-) -> SenderIdentityVerifiedEvent:
+    display_name: str = ""
+) -> Event:
     """
-    Create a SenderIdentityVerifiedEvent with the given data
+    Create an event for a sender identity being verified.
     
     Args:
-        identity_id: ID of the verified sender identity
-        user_id: ID of the user who owns the sender identity
-        identity_type: Type of identity (EMAIL, PHONE)
+        identity_id: ID of the sender identity
+        user_id: User ID
+        identity_type: Type of identity (EMAIL, PHONE, WHATSAPP)
         value: The email address or phone number
-        display_name: The display name for the sender identity
-        metadata: Optional event metadata
+        display_name: How it appears to recipients
         
     Returns:
-        SenderIdentityVerifiedEvent instance
+        Event: The created event
     """
-    payload = SenderIdentityData(
-        identity_id=identity_id,
-        user_id=user_id,
-        identity_type=identity_type,
-        value=value,
-        display_name=display_name,
-        is_verified=True
+    return Event(
+        event_type="sender_identity.verified",
+        metadata=EventMetadata(
+            user_id=user_id,
+            entity_id=identity_id,
+            entity_type="sender_identity"
+        ),
+        payload=SenderIdentityData(
+            identity_id=identity_id,
+            user_id=user_id,
+            identity_type=identity_type,
+            value=value,
+            display_name=display_name,
+            is_verified=True
+        )
     )
-    
-    if metadata is None:
-        metadata = EventMetadata(user_id=user_id)
-    
-    return SenderIdentityVerifiedEvent(payload=payload, metadata=metadata)
 
 def create_default_sender_identity_set_event(
     identity_id: int,
     user_id: int,
     identity_type: str,
     value: str,
-    display_name: str,
-    metadata: Optional[EventMetadata] = None
-) -> DefaultSenderIdentitySetEvent:
+    display_name: str = ""
+) -> Event:
     """
-    Create a DefaultSenderIdentitySetEvent with the given data
+    Create an event for a sender identity being set as default.
     
     Args:
-        identity_id: ID of the sender identity set as default
-        user_id: ID of the user who owns the sender identity
-        identity_type: Type of identity (EMAIL, PHONE)
+        identity_id: ID of the sender identity
+        user_id: User ID
+        identity_type: Type of identity (EMAIL, PHONE, WHATSAPP)
         value: The email address or phone number
-        display_name: The display name for the sender identity
-        metadata: Optional event metadata
+        display_name: How it appears to recipients
         
     Returns:
-        DefaultSenderIdentitySetEvent instance
+        Event: The created event
     """
-    payload = SenderIdentityData(
-        identity_id=identity_id,
-        user_id=user_id,
-        identity_type=identity_type,
-        value=value,
-        display_name=display_name,
-        is_default=True
-    )
-    
-    if metadata is None:
-        metadata = EventMetadata(user_id=user_id)
-    
-    return DefaultSenderIdentitySetEvent(payload=payload, metadata=metadata) 
+    return Event(
+        event_type="sender_identity.default_set",
+        metadata=EventMetadata(
+            user_id=user_id,
+            entity_id=identity_id,
+            entity_type="sender_identity"
+        ),
+        payload=SenderIdentityData(
+            identity_id=identity_id,
+            user_id=user_id,
+            identity_type=identity_type,
+            value=value,
+            display_name=display_name,
+            is_default=True
+        )
+    ) 

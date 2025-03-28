@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 from .base import Event
 from .exceptions import EventHandlerError, EventDispatchError, EventRetryError
 from .persistence import event_store
-from app.core.error_handling import handle_exceptions
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -32,6 +31,37 @@ DEFAULT_RETRY_BACKOFF = settings.EVENT_RETRY_BACKOFF
 # Event persistence flag - determines if events should be stored persistently
 # Controlled via settings
 PERSIST_EVENTS = settings.EVENT_PERSISTENCE_ENABLED
+
+# Create a local version of handle_exceptions to break circular dependency
+def handle_exceptions(
+    error_message: str = "Operation failed",
+    log_error: bool = True,
+    reraise: bool = True
+):
+    """
+    A decorator for standardized exception handling within the event system.
+    
+    Args:
+        error_message: Base message to use when creating exception
+        log_error: Whether to log the exception
+        reraise: Whether to reraise the exception (True) or return None (False)
+        
+    Returns:
+        Decorated function
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if log_error:
+                    logger.exception(f"{error_message}: {str(e)}")
+                if reraise:
+                    raise
+                return None
+        return wrapper
+    return decorator
 
 # Retry handling
 class RetryPolicy:

@@ -83,6 +83,6 @@ def handle_user_deleted(event: UserDeletedEvent) -> None:
 # Register all user handlers with the event dispatcher
 def register_handlers():
     """Register all user handlers with the event dispatcher"""
-    event_dispatcher.subscribe(UserCreatedEvent.event_type, handle_user_created)
-    event_dispatcher.subscribe(UserUpdatedEvent.event_type, handle_user_updated)
-    event_dispatcher.subscribe(UserDeletedEvent.event_type, handle_user_deleted) 
+    event_dispatcher.subscribe("user.created", handle_user_created)
+    event_dispatcher.subscribe("user.updated", handle_user_updated)
+    event_dispatcher.subscribe("user.deleted", handle_user_deleted) 
