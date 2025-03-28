@@ -17,12 +17,15 @@ class TwilioService:
     """
     
     @staticmethod
-    def get_twilio_credentials() -> Tuple[Optional[str], Optional[str]]:
+    def get_twilio_credentials() -> Tuple[str, str]:
         """
         Get Twilio credentials from settings.
         
         Returns:
             Tuple containing (account_sid, auth_token)
+            
+        Raises:
+            ServiceError: If credentials are not configured
         """
         try:
             account_sid = settings.TWILIO_ACCOUNT_SID
@@ -30,12 +33,13 @@ class TwilioService:
             
             if not account_sid or not auth_token:
                 logger.warning("Twilio credentials not configured in environment variables")
+                raise ServiceError("twilio", "Twilio credentials not configured in environment variables")
                 
             return account_sid, auth_token
             
         except Exception as e:
             logger.error(f"Error getting Twilio credentials: {str(e)}")
-            return None, None
+            raise ServiceError("twilio", "Failed to get Twilio credentials", str(e))
     
     @staticmethod
     def send_message(

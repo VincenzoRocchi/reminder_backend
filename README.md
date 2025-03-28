@@ -488,3 +488,25 @@ The service layer contains business logic and coordinates across multiple reposi
 - **Transaction Management**: Services manage database transactions
 - **External Integration**: Services handle external API calls
 - **Error Handling**: Centralized error handling and retries
+
+## Error Handling
+
+We've standardized error handling throughout the codebase to ensure consistency and reliability. The main principles are:
+
+1. **Use explicit exceptions** rather than returning None/boolean values
+2. **Consistent transaction management** using the `@with_transaction` decorator
+3. **Centralized error handling** using the `@handle_exceptions` decorator
+
+### Using Error Handling Utilities
+
+Services should use these decorators from `app/core/error_handling.py`:
+
+```python
+# Example service method with proper error handling
+@with_transaction  # Transaction management first
+@handle_exceptions(error_message="Failed to create user")  # Error handling second
+def create_user(self, db: Session, *, user_in: UserCreate) -> User:
+    # Implementation...
+```
+
+See the complete documentation in [docs/error_handling_guide.md](docs/error_handling_guide.md).

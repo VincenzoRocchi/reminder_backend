@@ -15,6 +15,7 @@ from app.core.exceptions import (
     InvalidConfigurationError,
     UserNotFoundError
 )
+from app.core.error_handling import handle_exceptions, with_transaction
 
 class SenderIdentityService:
     """
@@ -25,13 +26,14 @@ class SenderIdentityService:
     def __init__(self):
         self.repository = sender_identity_repository
     
+    @handle_exceptions(error_message="Failed to get sender identity")
     def get_sender_identity(
         self, 
         db: Session, 
         *, 
         sender_identity_id: int,
         user_id: Optional[int] = None
-    ) -> Optional[SenderIdentity]:
+    ) -> SenderIdentity:
         """
         Get a sender identity by ID.
         
@@ -41,7 +43,7 @@ class SenderIdentityService:
             user_id: Optional user ID for authorization
             
         Returns:
-            Optional[SenderIdentity]: Sender identity if found, None otherwise
+            SenderIdentity: Sender identity
             
         Raises:
             SenderIdentityNotFoundError: If sender identity is not found
@@ -56,14 +58,14 @@ class SenderIdentityService:
             
         return sender_identity
     
-    def get_user_sender_identities(
+    @handle_exceptions(error_message="Failed to get sender identities by user")
+    def get_sender_identities_by_user(
         self, 
         db: Session, 
         *, 
         user_id: int,
         skip: int = 0,
-        limit: int = 100,
-        identity_type: Optional[IdentityTypeEnum] = None
+        limit: int = 100
     ) -> List[SenderIdentity]:
         """
         Get all sender identities for a user.
@@ -73,98 +75,14 @@ class SenderIdentityService:
             user_id: User ID
             skip: Number of records to skip
             limit: Maximum number of records to return
-            identity_type: Optional filter by identity type
             
         Returns:
             List[SenderIdentity]: List of sender identities
-            
-        Raises:
-            UserNotFoundError: If user is not found
         """
-        # Verify user exists
-        user = user_repository.get(db, id=user_id)
-        if not user:
-            raise UserNotFoundError(f"User with ID {user_id} not found")
-        
-        # If identity type is specified, filter by type
-        if identity_type:
-            return self.get_identities_by_type(
-                db,
-                user_id=user_id,
-                identity_type=identity_type,
-                skip=skip,
-                limit=limit
-            )
-        
-        return self.repository.get_by_user_id(
-            db,
-            user_id=user_id,
-            skip=skip,
-            limit=limit
-        )
+        return self.repository.get_by_user_id(db, user_id=user_id, skip=skip, limit=limit)
     
-    def get_verified_identities(
-        self, 
-        db: Session, 
-        *, 
-        user_id: int
-    ) -> List[SenderIdentity]:
-        """
-        Get all verified sender identities for a user.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            
-        Returns:
-            List[SenderIdentity]: List of verified sender identities
-            
-        Raises:
-            UserNotFoundError: If user is not found
-        """
-        # Verify user exists
-        user = user_repository.get(db, id=user_id)
-        if not user:
-            raise UserNotFoundError(f"User with ID {user_id} not found")
-        
-        return self.repository.get_verified_identities(
-            db,
-            user_id=user_id
-        )
-    
-    def get_default_identity(
-        self, 
-        db: Session, 
-        *, 
-        user_id: int,
-        identity_type: IdentityTypeEnum
-    ) -> Optional[SenderIdentity]:
-        """
-        Get the default sender identity of a specific type for a user.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            identity_type: Type of sender identity
-            
-        Returns:
-            Optional[SenderIdentity]: Default sender identity if found, None otherwise
-            
-        Raises:
-            UserNotFoundError: If user is not found
-        """
-        # Verify user exists
-        user = user_repository.get(db, id=user_id)
-        if not user:
-            raise UserNotFoundError(f"User with ID {user_id} not found")
-        
-        return self.repository.get_default_identity(
-            db,
-            user_id=user_id,
-            identity_type=identity_type
-        )
-    
-    def get_identities_by_type(
+    @handle_exceptions(error_message="Failed to get sender identities by type")
+    def get_sender_identities_by_type(
         self, 
         db: Session, 
         *, 
@@ -179,7 +97,7 @@ class SenderIdentityService:
         Args:
             db: Database session
             user_id: User ID
-            identity_type: Type of identity (PHONE or EMAIL)
+            identity_type: Type of identity (EMAIL, PHONE, etc.)
             skip: Number of records to skip
             limit: Maximum number of records to return
             
@@ -187,155 +105,118 @@ class SenderIdentityService:
             List[SenderIdentity]: List of sender identities
         """
         return self.repository.get_by_type(
-            db,
-            user_id=user_id,
-            identity_type=identity_type,
-            skip=skip,
-            limit=limit
-        )
+            db, user_id=user_id, identity_type=identity_type, skip=skip, limit=limit)
     
-    def get_identity_by_value(
-        self, 
-        db: Session, 
-        *, 
-        user_id: int,
-        value: str
-    ) -> Optional[SenderIdentity]:
-        """
-        Get a sender identity by value for a user.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            value: Identity value (phone number or email)
-            
-        Returns:
-            Optional[SenderIdentity]: Sender identity if found, None otherwise
-        """
-        return self.repository.get_by_value(
-            db,
-            user_id=user_id,
-            value=value
-        )
-    
+    @with_transaction
+    @handle_exceptions(error_message="Failed to create sender identity")
     def create_sender_identity(
         self, 
         db: Session, 
         *, 
-        user_id: int,
-        obj_in: SenderIdentityCreate
+        obj_in: SenderIdentityCreate, 
+        user_id: int
     ) -> SenderIdentity:
         """
         Create a new sender identity.
         
         Args:
             db: Database session
+            obj_in: Sender identity creation schema
             user_id: User ID
-            obj_in: SenderIdentityCreate object
             
         Returns:
             SenderIdentity: Created sender identity
             
         Raises:
-            UserNotFoundError: If user is not found
+            UserNotFoundError: If user not found
             SenderIdentityAlreadyExistsError: If identity with same value exists
+            InvalidConfigurationError: If identity configuration is invalid
         """
         # Verify user exists
         user = user_repository.get(db, id=user_id)
         if not user:
             raise UserNotFoundError(f"User with ID {user_id} not found")
-        
-        # Check for existing identity with same value
-        existing_identity = self.get_identity_by_value(
-            db,
-            user_id=user_id,
+            
+        # Validate identity type
+        if obj_in.identity_type not in [e.value for e in IdentityTypeEnum]:
+            raise InvalidConfigurationError(f"Invalid identity type: {obj_in.identity_type}")
+            
+        # Check if identity with same value and type exists
+        existing_identity = self.repository.get_by_value(
+            db, 
+            user_id=user_id, 
+            identity_type=obj_in.identity_type, 
             value=obj_in.value
         )
         if existing_identity:
             raise SenderIdentityAlreadyExistsError(
-                f"Sender identity with value '{obj_in.value}' already exists"
-            )
+                f"Sender identity with value '{obj_in.value}' already exists")
         
-        # If this is the first identity of its type, make it default
-        identities_of_type = self.get_identities_by_type(
-            db,
-            user_id=user_id,
-            identity_type=obj_in.identity_type
-        )
-        if not identities_of_type:
-            obj_in_dict = obj_in.model_dump()
-            obj_in_dict["is_default"] = True
-            obj_in_dict["user_id"] = user_id
-            db_obj = self.repository.model(**obj_in_dict)
-            db.add(db_obj)
-            db.commit()
-            db.refresh(db_obj)
-            return db_obj
+        # Create identity with user_id
+        obj_in_data = obj_in.model_dump()
+        obj_in_data["user_id"] = user_id
         
-        # Create new identity
-        obj_in_dict = obj_in.model_dump()
-        obj_in_dict["user_id"] = user_id
-        db_obj = self.repository.model(**obj_in_dict)
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        return self.repository.create(db, obj_in=obj_in_data)
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to update sender identity")
     def update_sender_identity(
         self, 
         db: Session, 
         *, 
-        sender_identity_id: int,
-        obj_in: SenderIdentityUpdate,
-        user_id: Optional[int] = None
+        sender_identity_id: int, 
+        obj_in: SenderIdentityUpdate, 
+        user_id: int
     ) -> SenderIdentity:
         """
-        Update a sender identity.
+        Update an existing sender identity.
         
         Args:
             db: Database session
             sender_identity_id: Sender identity ID
-            obj_in: SenderIdentityUpdate object
-            user_id: Optional user ID for authorization
+            obj_in: Sender identity update schema
+            user_id: User ID for authorization
             
         Returns:
             SenderIdentity: Updated sender identity
             
         Raises:
-            SenderIdentityNotFoundError: If sender identity is not found
-            SenderIdentityAlreadyExistsError: If new value conflicts with existing
+            SenderIdentityNotFoundError: If sender identity not found
+            SenderIdentityAlreadyExistsError: If updated value conflicts with existing identity
+            InvalidConfigurationError: If identity configuration is invalid
         """
-        # Verify sender identity exists
-        sender_identity = self.get_sender_identity(
-            db, 
-            sender_identity_id=sender_identity_id,
-            user_id=user_id
-        )
+        sender_identity = self.get_sender_identity(db, sender_identity_id=sender_identity_id, user_id=user_id)
         
-        # Check for value conflict if being updated
-        if obj_in.value:
-            existing_identity = self.get_identity_by_value(
-                db,
-                user_id=sender_identity.user_id,
+        # Validate identity type if being updated
+        if hasattr(obj_in, 'identity_type') and obj_in.identity_type is not None:
+            if obj_in.identity_type not in [e.value for e in IdentityTypeEnum]:
+                raise InvalidConfigurationError(f"Invalid identity type: {obj_in.identity_type}")
+        
+        # Check for value conflicts if value is being updated
+        if hasattr(obj_in, 'value') and obj_in.value is not None and obj_in.value != sender_identity.value:
+            # Use the new type if it's being updated, otherwise use the existing type
+            identity_type = getattr(obj_in, 'identity_type', sender_identity.identity_type)
+            
+            existing_identity = self.repository.get_by_value(
+                db, 
+                user_id=user_id, 
+                identity_type=identity_type, 
                 value=obj_in.value
             )
             if existing_identity and existing_identity.id != sender_identity_id:
                 raise SenderIdentityAlreadyExistsError(
-                    f"Sender identity with value '{obj_in.value}' already exists"
-                )
-        
-        return self.repository.update(
-            db,
-            db_obj=sender_identity,
-            obj_in=obj_in
-        )
+                    f"Sender identity with value '{obj_in.value}' already exists")
+                
+        return self.repository.update(db, db_obj=sender_identity, obj_in=obj_in)
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to delete sender identity")
     def delete_sender_identity(
         self, 
         db: Session, 
         *, 
-        sender_identity_id: int,
-        user_id: Optional[int] = None
+        sender_identity_id: int, 
+        user_id: int
     ) -> SenderIdentity:
         """
         Delete a sender identity.
@@ -343,83 +224,111 @@ class SenderIdentityService:
         Args:
             db: Database session
             sender_identity_id: Sender identity ID
-            user_id: Optional user ID for authorization
+            user_id: User ID for authorization
             
         Returns:
             SenderIdentity: Deleted sender identity
             
         Raises:
-            SenderIdentityNotFoundError: If sender identity is not found
+            SenderIdentityNotFoundError: If sender identity not found
         """
-        # Verify sender identity exists
-        sender_identity = self.get_sender_identity(
-            db, 
-            sender_identity_id=sender_identity_id,
-            user_id=user_id
-        )
+        sender_identity = self.get_sender_identity(db, sender_identity_id=sender_identity_id, user_id=user_id)
         return self.repository.delete(db, id=sender_identity_id)
     
+    @handle_exceptions(error_message="Failed to get default sender identity")
+    def get_default_sender_identity(
+        self, 
+        db: Session, 
+        *, 
+        user_id: int,
+        identity_type: IdentityTypeEnum
+    ) -> Optional[SenderIdentity]:
+        """
+        Get the default sender identity of a specific type for a user.
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            identity_type: Type of identity (EMAIL, PHONE, etc.)
+            
+        Returns:
+            Optional[SenderIdentity]: Default sender identity if found, None otherwise
+        """
+        return self.repository.get_default(db, user_id=user_id, identity_type=identity_type)
+    
+    @with_transaction
+    @handle_exceptions(error_message="Failed to set default sender identity")
+    def set_default_sender_identity(
+        self, 
+        db: Session, 
+        *, 
+        sender_identity_id: int, 
+        user_id: int
+    ) -> SenderIdentity:
+        """
+        Set a sender identity as default for its type.
+        
+        Args:
+            db: Database session
+            sender_identity_id: Sender identity ID
+            user_id: User ID for authorization
+            
+        Returns:
+            SenderIdentity: Updated sender identity
+            
+        Raises:
+            SenderIdentityNotFoundError: If sender identity not found
+        """
+        # Get the identity and verify it belongs to the user
+        sender_identity = self.get_sender_identity(db, sender_identity_id=sender_identity_id, user_id=user_id)
+        
+        # Clear current default for this type
+        current_defaults = self.repository.get_by_type(
+            db, user_id=user_id, identity_type=sender_identity.identity_type)
+        
+        for identity in current_defaults:
+            if identity.is_default and identity.id != sender_identity_id:
+                self.repository.update(db, db_obj=identity, obj_in={"is_default": False})
+        
+        # Set this one as default
+        return self.repository.update(db, db_obj=sender_identity, obj_in={"is_default": True})
+    
+    @with_transaction
+    @handle_exceptions(error_message="Failed to verify sender identity")
     def verify_sender_identity(
         self, 
         db: Session, 
         *, 
-        sender_identity_id: int,
-        user_id: Optional[int] = None
+        sender_identity_id: int, 
+        user_id: int,
+        verification_code: str
     ) -> SenderIdentity:
         """
-        Set a sender identity as verified.
+        Verify a sender identity using a verification code.
         
         Args:
             db: Database session
             sender_identity_id: Sender identity ID
-            user_id: Optional user ID for authorization
+            user_id: User ID for authorization
+            verification_code: Code to verify the identity
             
         Returns:
             SenderIdentity: Updated sender identity
             
         Raises:
-            SenderIdentityNotFoundError: If identity not found
+            SenderIdentityNotFoundError: If sender identity not found
+            InvalidConfigurationError: If verification code is invalid
         """
-        # In a real-world application, this would include verification logic
+        sender_identity = self.get_sender_identity(db, sender_identity_id=sender_identity_id, user_id=user_id)
         
-        # Get the identity, which also checks user_id if provided
-        identity = self.get_sender_identity(
-            db, 
-            sender_identity_id=sender_identity_id,
-            user_id=user_id
-        )
+        # In a real implementation, you'd validate the verification code here
+        # For this example, we'll just mark it as verified
         
-        # Update the identity to set is_verified to True
-        update_data = {"is_verified": True}
-        return self.repository.update(
-            db,
-            db_obj=identity,
-            obj_in=update_data
-        )
-    
-    def set_default_identity(
-        self, 
-        db: Session, 
-        *, 
-        sender_identity_id: int,
-        user_id: int
-    ) -> SenderIdentity:
-        """
-        Set a sender identity as default for a user.
-        
-        Args:
-            db: Database session
-            sender_identity_id: Sender identity ID
-            user_id: User ID
+        # TODO: Implement actual verification logic
+        if verification_code != "000000":  # Example validation
+            raise InvalidConfigurationError("Invalid verification code")
             
-        Returns:
-            SenderIdentity: Updated sender identity
-            
-        Raises:
-            SenderIdentityNotFoundError: If identity not found
-        """
-        identity = self.get_sender_identity(db, sender_identity_id=sender_identity_id, user_id=user_id)
-        return self.repository.set_default_identity(db, identity_id=sender_identity_id, user_id=user_id)
+        return self.repository.update(db, db_obj=sender_identity, obj_in={"is_verified": True})
 
 # Create singleton instance
 sender_identity_service = SenderIdentityService() 

@@ -261,13 +261,16 @@ class NotificationRepository(BaseRepository[Notification, NotificationCreate, No
             
         Returns:
             Notification: Updated notification
+            
+        Raises:
+            DatabaseError: If notification not found or update fails
         """
         notification = self.get(db, id=notification_id)
-        if notification:
-            notification.status = NotificationStatusEnum.SENT
-            notification.sent_at = datetime.utcnow()
-            db.commit()
-            db.refresh(notification)
+        # get will now raise an exception if not found
+        notification.status = NotificationStatusEnum.SENT
+        notification.sent_at = datetime.utcnow()
+        db.commit()
+        db.refresh(notification)
         return notification
     
     def mark_as_failed(
@@ -287,13 +290,16 @@ class NotificationRepository(BaseRepository[Notification, NotificationCreate, No
             
         Returns:
             Notification: Updated notification
+            
+        Raises:
+            DatabaseError: If notification not found or update fails
         """
         notification = self.get(db, id=notification_id)
-        if notification:
-            notification.status = NotificationStatusEnum.FAILED
-            notification.error_message = error_message
-            db.commit()
-            db.refresh(notification)
+        # get will now raise an exception if not found
+        notification.status = NotificationStatusEnum.FAILED
+        notification.error_message = error_message
+        db.commit()
+        db.refresh(notification)
         return notification
     
     def mark_as_cancelled(
@@ -311,12 +317,15 @@ class NotificationRepository(BaseRepository[Notification, NotificationCreate, No
             
         Returns:
             Notification: Updated notification
+            
+        Raises:
+            DatabaseError: If notification not found or update fails
         """
         notification = self.get(db, id=notification_id)
-        if notification:
-            notification.status = NotificationStatusEnum.CANCELLED
-            db.commit()
-            db.refresh(notification)
+        # get will now raise an exception if not found
+        notification.status = NotificationStatusEnum.CANCELLED
+        db.commit()
+        db.refresh(notification)
         return notification
 
     def get_filtered(

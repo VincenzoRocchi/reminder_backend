@@ -4,6 +4,8 @@ from sqlalchemy import select, update, delete
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.core.exceptions import DatabaseError, AppException
+
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
@@ -22,7 +24,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         self.model = model
     
-    def get(self, db: Session, id: Any) -> Optional[ModelType]:
+    def get(self, db: Session, id: Any) -> ModelType:
         """
         Get a single record by ID.
         
@@ -31,9 +33,15 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             id: Record ID
             
         Returns:
-            Optional[ModelType]: Record if found, None otherwise
+            ModelType: Record if found
+            
+        Raises:
+            DatabaseError: If record not found
         """
-        return db.query(self.model).filter(self.model.id == id).first()
+        result = db.query(self.model).filter(self.model.id == id).first()
+        if not result:
+            raise DatabaseError(f"{self.model.__name__} with ID {id} not found")
+        return result
     
     def get_multi(
         self, 
@@ -55,14 +63,17 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             List[ModelType]: List of records
         """
-        query = db.query(self.model)
-        
-        if filters:
-            for key, value in filters.items():
-                if hasattr(self.model, key):
-                    query = query.filter(getattr(self.model, key) == value)
-        
-        return query.offset(skip).limit(limit).all()
+        try:
+            query = db.query(self.model)
+            
+            if filters:
+                for key, value in filters.items():
+                    if hasattr(self.model, key):
+                        query = query.filter(getattr(self.model, key) == value)
+            
+            return query.offset(skip).limit(limit).all()
+        except Exception as e:
+            raise DatabaseError(f"Failed to get {self.model.__name__} records", str(e))
     
     def create(self, db: Session, *, obj_in: CreateSchemaType | Dict[str, Any]) -> ModelType:
         """
@@ -74,17 +85,24 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             
         Returns:
             ModelType: Created record
-        """
-        if isinstance(obj_in, dict):
-            obj_in_data = obj_in
-        else:
-            obj_in_data = obj_in.model_dump()
             
-        db_obj = self.model(**obj_in_data)
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        Raises:
+            DatabaseError: If creation fails
+        """
+        try:
+            if isinstance(obj_in, dict):
+                obj_in_data = obj_in
+            else:
+                obj_in_data = obj_in.model_dump()
+                
+            db_obj = self.model(**obj_in_data)
+            db.add(db_obj)
+            db.commit()
+            db.refresh(db_obj)
+            return db_obj
+        except Exception as e:
+            db.rollback()
+            raise DatabaseError(f"Failed to create {self.model.__name__}", str(e))
     
     def update(
         self, 
@@ -103,21 +121,28 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             
         Returns:
             ModelType: Updated record
-        """
-        obj_data = db_obj.__dict__
-        if isinstance(obj_in, dict):
-            update_data = obj_in
-        else:
-            update_data = obj_in.model_dump(exclude_unset=True)
             
-        for field in obj_data:
-            if field in update_data:
-                setattr(db_obj, field, update_data[field])
+        Raises:
+            DatabaseError: If update fails
+        """
+        try:
+            obj_data = db_obj.__dict__
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
                 
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+            for field in obj_data:
+                if field in update_data:
+                    setattr(db_obj, field, update_data[field])
+                    
+            db.add(db_obj)
+            db.commit()
+            db.refresh(db_obj)
+            return db_obj
+        except Exception as e:
+            db.rollback()
+            raise DatabaseError(f"Failed to update {self.model.__name__} with ID {db_obj.id}", str(e))
     
     def delete(self, db: Session, *, id: int) -> ModelType:
         """
@@ -129,11 +154,20 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             
         Returns:
             ModelType: Deleted record
+            
+        Raises:
+            DatabaseError: If record not found or deletion fails
         """
-        obj = db.query(self.model).get(id)
-        db.delete(obj)
-        db.commit()
-        return obj
+        try:
+            obj = self.get(db, id=id)  # This will raise an exception if not found
+            db.delete(obj)
+            db.commit()
+            return obj
+        except AppException:
+            raise  # Re-raise app exceptions as they are
+        except Exception as e:
+            db.rollback()
+            raise DatabaseError(f"Failed to delete {self.model.__name__} with ID {id}", str(e))
     
     def exists(self, db: Session, *, id: int) -> bool:
         """
@@ -146,7 +180,10 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             bool: True if record exists, False otherwise
         """
-        return db.query(self.model).filter(self.model.id == id).first() is not None
+        try:
+            return db.query(self.model).filter(self.model.id == id).first() is not None
+        except Exception as e:
+            raise DatabaseError(f"Failed to check if {self.model.__name__} exists", str(e))
     
     def count(self, db: Session, *, filters: Optional[Dict[str, Any]] = None) -> int:
         """
@@ -158,15 +195,21 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             
         Returns:
             int: Number of records
+            
+        Raises:
+            DatabaseError: If count operation fails
         """
-        query = db.query(self.model)
-        
-        if filters:
-            for key, value in filters.items():
-                if hasattr(self.model, key):
-                    query = query.filter(getattr(self.model, key) == value)
-        
-        return query.count()
+        try:
+            query = db.query(self.model)
+            
+            if filters:
+                for key, value in filters.items():
+                    if hasattr(self.model, key):
+                        query = query.filter(getattr(self.model, key) == value)
+            
+            return query.count()
+        except Exception as e:
+            raise DatabaseError(f"Failed to count {self.model.__name__} records", str(e))
     
     def get_filtered(
         self, 
@@ -201,40 +244,46 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             
         Returns:
             List[ModelType]: List of records
+            
+        Raises:
+            DatabaseError: If query fails
         """
-        # Start with base query
-        query = db.query(self.model)
-        
-        # Add filters
-        if user_id is not None and hasattr(self.model, 'user_id'):
-            query = query.filter(self.model.user_id == user_id)
+        try:
+            # Start with base query
+            query = db.query(self.model)
             
-        if reminder_id is not None and hasattr(self.model, 'reminder_id'):
-            query = query.filter(self.model.reminder_id == reminder_id)
+            # Add filters
+            if user_id is not None and hasattr(self.model, 'user_id'):
+                query = query.filter(self.model.user_id == user_id)
+                
+            if reminder_id is not None and hasattr(self.model, 'reminder_id'):
+                query = query.filter(self.model.reminder_id == reminder_id)
+                
+            if client_id is not None and hasattr(self.model, 'client_id'):
+                query = query.filter(self.model.client_id == client_id)
+                
+            if status is not None and hasattr(self.model, 'status'):
+                query = query.filter(self.model.status == status)
+                
+            if notification_type is not None and hasattr(self.model, 'notification_type'):
+                query = query.filter(self.model.notification_type == notification_type)
+                
+            if start_date is not None and hasattr(self.model, 'created_at'):
+                query = query.filter(self.model.created_at >= start_date)
+                
+            if end_date is not None and hasattr(self.model, 'created_at'):
+                query = query.filter(self.model.created_at <= end_date)
+                
+            # Add any additional filters
+            for key, value in kwargs.items():
+                if hasattr(self.model, key):
+                    query = query.filter(getattr(self.model, key) == value)
             
-        if client_id is not None and hasattr(self.model, 'client_id'):
-            query = query.filter(self.model.client_id == client_id)
-            
-        if status is not None and hasattr(self.model, 'status'):
-            query = query.filter(self.model.status == status)
-            
-        if notification_type is not None and hasattr(self.model, 'notification_type'):
-            query = query.filter(self.model.notification_type == notification_type)
-            
-        if start_date is not None and hasattr(self.model, 'created_at'):
-            query = query.filter(self.model.created_at >= start_date)
-            
-        if end_date is not None and hasattr(self.model, 'created_at'):
-            query = query.filter(self.model.created_at <= end_date)
-            
-        # Add any additional filters
-        for key, value in kwargs.items():
-            if hasattr(self.model, key):
-                query = query.filter(getattr(self.model, key) == value)
-        
-        # Order by creation date (newest first) if the model has created_at
-        if hasattr(self.model, 'created_at'):
-            query = query.order_by(self.model.created_at.desc())
-            
-        # Apply pagination
-        return query.offset(skip).limit(limit).all() 
+            # Order by creation date (newest first) if the model has created_at
+            if hasattr(self.model, 'created_at'):
+                query = query.order_by(self.model.created_at.desc())
+                
+            # Apply pagination
+            return query.offset(skip).limit(limit).all()
+        except Exception as e:
+            raise DatabaseError(f"Failed to get filtered {self.model.__name__} records", str(e)) 
