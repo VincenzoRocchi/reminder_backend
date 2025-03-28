@@ -14,15 +14,26 @@ class NotificationCreate(NotificationBase):
     """Schema for creating a notification"""
     pass
 
+class NotificationCreateDB(NotificationBase):
+    """Schema for creating a notification in the database (with user_id)"""
+    user_id: int
+
 class NotificationUpdate(BaseModel):
-    """Schema for updating a notification"""
-    status: Optional[ReminderStatus] = None
+    """
+    Schema for updating a notification
+    
+    Note: Status changes should be made through dedicated endpoints:
+    - mark-as-sent
+    - mark-as-failed
+    - mark-as-cancelled
+    """
     sent_at: Optional[datetime] = None
     error_message: Optional[str] = None
 
 class NotificationInDBBase(NotificationBase):
     """Base schema for a notification in database"""
     id: int
+    user_id: int
     sent_at: Optional[datetime] = None
     error_message: Optional[str] = None
     created_at: datetime
@@ -30,11 +41,11 @@ class NotificationInDBBase(NotificationBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-class Notification(NotificationInDBBase):
+class NotificationSchema(NotificationInDBBase):
     """Complete notification model returned from API"""
     pass
 
-class NotificationDetail(Notification):
+class NotificationDetail(NotificationSchema):
     """Notification with extra details"""
     reminder_title: str
     client_name: str

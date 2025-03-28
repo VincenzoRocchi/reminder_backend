@@ -7,7 +7,7 @@ from app.core.exceptions import InvalidConfigurationError
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# Decorator to create flexible field validators
+# Decorator to create field validators
 def flexible_field_validator(field_name: str, validation_type: str = 'format'):
     def decorator(validation_func: Callable[[Any], Any]):
         @field_validator(field_name)
@@ -16,17 +16,11 @@ def flexible_field_validator(field_name: str, validation_type: str = 'format'):
                 return None
             
             try:
-                # Attempt to validate the field value using the provided validation function
+                # Validate the field value using the provided validation function
                 return validation_func(value)
             except (InvalidConfigurationError, ValueError) as e:
-                # If validation fails and strict validation is not required, log a warning and return the original value
-                if not settings.should_validate(validation_type):
-                    logger.warning(
-                        f"Pydantic validation bypassed: {field_name} | {str(e)} | "
-                        f"STRICT_VALIDATION={settings.STRICT_VALIDATION}"
-                    )
-                    return value
-                # If strict validation is required, re-raise the exception
+                # All validation errors are now raised as strict validation is always enabled
+                logger.warning(f"Validation failed: {field_name} | {str(e)}")
                 raise
         
         return validated_field

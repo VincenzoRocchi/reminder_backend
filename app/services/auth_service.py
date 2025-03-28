@@ -11,9 +11,13 @@ from app.core.exceptions import (
     TokenInvalidError,
     UserNotFoundError
 )
+from app.core.security import verify_password
+from app.core.error_handling import handle_exceptions
+import logging
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
 
 class AuthService:
     @staticmethod
@@ -27,6 +31,7 @@ class AuthService:
         return pwd_context.hash(password)
 
     @staticmethod
+    @handle_exceptions(error_message="Failed to create access token")
     def create_access_token(subject: str | Any, expires_delta: Optional[timedelta] = None) -> str:
         """Create a new access token."""
         if expires_delta:
@@ -55,6 +60,7 @@ class AuthService:
         return encoded_jwt
 
     @staticmethod
+    @handle_exceptions(error_message="Failed to verify token")
     def verify_token(token: str) -> TokenPayload:
         """Verify a token and return its payload."""
         try:
@@ -96,6 +102,7 @@ class AuthService:
         return TokenData(sub=token_data.sub)
 
     @staticmethod
+    @handle_exceptions(error_message="Failed to authenticate user")
     async def authenticate_user(email: str, password: str) -> User:
         """Authenticate a user by email and password."""
         user = await User.get_by_email(email)
@@ -124,4 +131,7 @@ class AuthService:
         
         # Update password
         user.hashed_password = AuthService.get_password_hash(new_password)
-        await user.save() 
+        await user.save()
+
+# Create singleton instance
+auth_service = AuthService() 

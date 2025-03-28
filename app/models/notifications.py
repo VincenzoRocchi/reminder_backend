@@ -16,6 +16,7 @@ class Notification(Base):
     __tablename__ = "notifications"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=False)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     message = Column(Text, nullable=True)
@@ -27,6 +28,7 @@ class Notification(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
+    user = relationship("User", back_populates="notifications")
     reminder = relationship("Reminder", back_populates="notifications")
     client = relationship("Client", back_populates="notifications")
     

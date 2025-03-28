@@ -1,13 +1,14 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.repositories.reminder import reminder_repository
 from app.repositories.client import client_repository
+from app.models.reminders import Reminder
 from app.schemas.reminders import (
     ReminderCreate, 
     ReminderUpdate, 
-    Reminder, 
+    ReminderSchema,
     ReminderDetail,
     ReminderType,
     NotificationType
@@ -15,8 +16,10 @@ from app.schemas.reminders import (
 from app.core.exceptions import (
     ReminderNotFoundError,
     ClientNotFoundError,
-    InvalidConfigurationError
+    InvalidConfigurationError,
+    InvalidOperationError
 )
+from app.core.error_handling import handle_exceptions, with_transaction
 
 class ReminderService:
     """
@@ -28,6 +31,7 @@ class ReminderService:
         self.repository = reminder_repository
         self.client_repository = client_repository
     
+    @handle_exceptions(error_message="Failed to get reminder")
     def get_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
         """
         Get a reminder by ID.
@@ -48,14 +52,15 @@ class ReminderService:
             raise ReminderNotFoundError(f"Reminder with ID {reminder_id} not found")
         return reminder
     
-    def get_user_reminders(
+    @handle_exceptions(error_message="Failed to get reminders by user ID")
+    def get_reminders_by_user_id(
         self, 
         db: Session, 
         *, 
         user_id: int,
         skip: int = 0,
         limit: int = 100,
-        active_only: bool = False
+        include_inactive: bool = False
     ) -> List[Reminder]:
         """
         Get all reminders for a user.
@@ -65,75 +70,64 @@ class ReminderService:
             user_id: User ID
             skip: Number of records to skip
             limit: Maximum number of records to return
-            active_only: Whether to return only active reminders
+            include_inactive: Whether to include inactive reminders
             
         Returns:
             List[Reminder]: List of reminders
         """
         return self.repository.get_by_user_id(
-            db,
+            db, 
             user_id=user_id,
             skip=skip,
             limit=limit,
-            active_only=active_only
+            include_inactive=include_inactive
         )
     
-    def get_upcoming_reminders(
+    @handle_exceptions(error_message="Failed to get reminders by client ID")
+    def get_reminders_by_client_id(
         self, 
         db: Session, 
         *, 
+        client_id: int,
         user_id: int,
+        skip: int = 0,
         limit: int = 100,
-        active_only: bool = True
+        include_inactive: bool = False
     ) -> List[Reminder]:
         """
-        Get upcoming reminders for a user.
+        Get all reminders for a client.
         
         Args:
             db: Database session
-            user_id: User ID
+            client_id: Client ID
+            user_id: User ID for authorization
+            skip: Number of records to skip
             limit: Maximum number of records to return
-            active_only: Whether to return only active reminders
+            include_inactive: Whether to include inactive reminders
             
         Returns:
-            List[Reminder]: List of upcoming reminders
+            List[Reminder]: List of reminders
         """
-        return self.repository.get_upcoming_reminders(
-            db,
-            user_id=user_id,
+        # Verify the client belongs to the user
+        client = self.client_repository.get(db, id=client_id)
+        if not client or client.user_id != user_id:
+            raise ClientNotFoundError(f"Client with ID {client_id} not found")
+            
+        return self.repository.get_by_client_id(
+            db, 
+            client_id=client_id,
+            skip=skip,
             limit=limit,
-            active_only=active_only
+            include_inactive=include_inactive
         )
     
-    def get_recurring_reminders(
-        self, 
-        db: Session, 
-        *, 
-        user_id: int,
-        active_only: bool = True
-    ) -> List[Reminder]:
-        """
-        Get recurring reminders for a user.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            active_only: Whether to return only active reminders
-            
-        Returns:
-            List[Reminder]: List of recurring reminders
-        """
-        return self.repository.get_recurring_reminders(
-            db,
-            user_id=user_id,
-            active_only=active_only
-        )
-    
+    @with_transaction
+    @handle_exceptions(error_message="Failed to create reminder")
     def create_reminder(
         self, 
         db: Session, 
         *, 
-        reminder_in: ReminderCreate,
+        reminder_in: ReminderCreate, 
         user_id: int
     ) -> Reminder:
         """
@@ -141,102 +135,81 @@ class ReminderService:
         
         Args:
             db: Database session
-            reminder_in: Reminder creation data
+            reminder_in: Reminder creation schema
             user_id: User ID
             
         Returns:
             Reminder: Created reminder
             
         Raises:
-            ClientNotFoundError: If any client not found
-            InvalidConfigurationError: If email/sender configuration is missing
+            ClientNotFoundError: If client not found
+            InvalidConfigurationError: If reminder configuration is invalid
         """
-        # Validate clients exist
-        for client_id in reminder_in.client_ids:
-            client = self.client_repository.get(db, id=client_id)
+        # Validate client exists and belongs to user
+        if reminder_in.client_id:
+            client = self.client_repository.get(db, id=reminder_in.client_id)
             if not client or client.user_id != user_id:
-                raise ClientNotFoundError(f"Client with ID {client_id} not found")
+                raise ClientNotFoundError(f"Client with ID {reminder_in.client_id} not found")
         
-        # Validate email configuration if needed
-        if reminder_in.notification_type == NotificationType.EMAIL:
-            if not reminder_in.email_configuration_id:
-                raise InvalidConfigurationError(
-                    "Email configuration is required for email notifications"
-                )
-        
-        # Validate sender identity if needed
-        if reminder_in.notification_type in [NotificationType.SMS, NotificationType.WHATSAPP]:
-            if not reminder_in.sender_identity_id:
-                raise InvalidConfigurationError(
-                    "Sender identity is required for SMS/WhatsApp notifications"
-                )
+        # Validate reminder configuration
+        if reminder_in.is_recurring and not reminder_in.recurrence_pattern:
+            raise InvalidConfigurationError("Recurring reminders must have a recurrence pattern")
         
         # Create reminder with user_id
-        reminder_data = reminder_in.model_dump()
-        reminder_data["user_id"] = user_id
-        return self.repository.create(db, obj_in=ReminderCreate(**reminder_data))
+        if isinstance(reminder_in, dict):
+            obj_data = reminder_in.copy()
+            obj_data["user_id"] = user_id
+        else:
+            obj_data = reminder_in.model_dump()
+            obj_data["user_id"] = user_id
+            
+        return self.repository.create(db, obj_in=obj_data)
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to update reminder")
     def update_reminder(
         self, 
         db: Session, 
         *, 
-        reminder_id: int,
-        user_id: int,
-        reminder_in: ReminderUpdate | Dict[str, Any]
+        reminder_id: int, 
+        reminder_in: ReminderUpdate, 
+        user_id: int
     ) -> Reminder:
         """
-        Update a reminder.
+        Update an existing reminder.
         
         Args:
             db: Database session
             reminder_id: Reminder ID
-            user_id: User ID
-            reminder_in: Update data
+            reminder_in: Reminder update schema
+            user_id: User ID for authorization
             
         Returns:
             Reminder: Updated reminder
             
         Raises:
             ReminderNotFoundError: If reminder not found
-            ClientNotFoundError: If any client not found
-            InvalidConfigurationError: If email/sender configuration is missing
+            ClientNotFoundError: If client not found
+            InvalidConfigurationError: If reminder configuration is invalid
         """
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
         
-        # If clients are being updated, validate them
-        if isinstance(reminder_in, dict):
-            client_ids = reminder_in.get("client_ids")
-        else:
-            client_ids = reminder_in.client_ids
-            
-        if client_ids:
-            for client_id in client_ids:
-                client = self.client_repository.get(db, id=client_id)
-                if not client or client.user_id != user_id:
-                    raise ClientNotFoundError(f"Client with ID {client_id} not found")
+        # If client_id is being changed, validate client exists and belongs to user
+        if hasattr(reminder_in, 'client_id') and reminder_in.client_id and reminder_in.client_id != reminder.client_id:
+            client = self.client_repository.get(db, id=reminder_in.client_id)
+            if not client or client.user_id != user_id:
+                raise ClientNotFoundError(f"Client with ID {reminder_in.client_id} not found")
         
-        # Validate email configuration if needed
-        if isinstance(reminder_in, dict):
-            notification_type = reminder_in.get("notification_type")
-            email_config_id = reminder_in.get("email_configuration_id")
-            sender_id = reminder_in.get("sender_identity_id")
-        else:
-            notification_type = reminder_in.notification_type
-            email_config_id = reminder_in.email_configuration_id
-            sender_id = reminder_in.sender_identity_id
-            
-        if notification_type == NotificationType.EMAIL and not email_config_id:
-            raise InvalidConfigurationError(
-                "Email configuration is required for email notifications"
-            )
-            
-        if notification_type in [NotificationType.SMS, NotificationType.WHATSAPP] and not sender_id:
-            raise InvalidConfigurationError(
-                "Sender identity is required for SMS/WhatsApp notifications"
-            )
-        
+        # Validate recurrence pattern if set to recurring
+        if hasattr(reminder_in, 'is_recurring') and reminder_in.is_recurring:
+            # If reminder is being set to recurring, ensure it has a recurrence pattern
+            if not reminder.recurrence_pattern and not getattr(reminder_in, 'recurrence_pattern', None):
+                raise InvalidConfigurationError("Recurring reminders must have a recurrence pattern")
+                
         return self.repository.update(db, db_obj=reminder, obj_in=reminder_in)
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to delete reminder")
     def delete_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
         """
         Delete a reminder.
@@ -244,7 +217,7 @@ class ReminderService:
         Args:
             db: Database session
             reminder_id: Reminder ID
-            user_id: User ID
+            user_id: User ID for authorization
             
         Returns:
             Reminder: Deleted reminder
@@ -255,74 +228,33 @@ class ReminderService:
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
         return self.repository.delete(db, id=reminder_id)
     
-    def get_reminder_with_stats(
+    @with_transaction
+    @handle_exceptions(error_message="Failed to mark reminder as active/inactive")
+    def set_reminder_active_status(
         self, 
         db: Session, 
         *, 
-        reminder_id: int,
-        user_id: int
-    ) -> ReminderDetail:
+        reminder_id: int, 
+        user_id: int, 
+        is_active: bool
+    ) -> Reminder:
         """
-        Get a reminder with its statistics.
+        Set a reminder's active status.
         
         Args:
             db: Database session
             reminder_id: Reminder ID
-            user_id: User ID
+            user_id: User ID for authorization
+            is_active: New active status
             
         Returns:
-            ReminderDetail: Reminder with statistics
+            Reminder: Updated reminder
             
         Raises:
             ReminderNotFoundError: If reminder not found
         """
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
-        
-        # Get statistics
-        client_ids = [r.client_id for r in reminder.reminder_recipients]
-        notifications_count = len(reminder.notifications)
-        sent_count = len([n for n in reminder.notifications if n.status == "SENT"])
-        failed_count = len([n for n in reminder.notifications if n.status == "FAILED"])
-        
-        # Create ReminderDetail object
-        reminder_data = Reminder.model_validate(reminder).model_dump()
-        return ReminderDetail(
-            **reminder_data,
-            clients=client_ids,
-            notifications_count=notifications_count,
-            sent_count=sent_count,
-            failed_count=failed_count
-        )
-    
-    def get_reminders_by_date_range(
-        self, 
-        db: Session, 
-        *, 
-        user_id: int,
-        start_date: datetime,
-        end_date: datetime,
-        active_only: bool = True
-    ) -> List[Reminder]:
-        """
-        Get reminders within a date range for a user.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            start_date: Start date
-            end_date: End date
-            active_only: Whether to return only active reminders
-            
-        Returns:
-            List[Reminder]: List of reminders
-        """
-        return self.repository.get_reminders_by_date_range(
-            db,
-            user_id=user_id,
-            start_date=start_date,
-            end_date=end_date,
-            active_only=active_only
-        )
+        return self.repository.update(db, db_obj=reminder, obj_in={"is_active": is_active})
 
 # Create singleton instance
 reminder_service = ReminderService() 

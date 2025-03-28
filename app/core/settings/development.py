@@ -19,25 +19,16 @@ class DevelopmentSettings(BaseAppSettings):
         env_key = os.getenv("DEV_SECRET_KEY")
         if env_key:
             return env_key
-            
-        # If not found, generate a key
+        
+        # If not found, use cached or generate a new key
         if DevelopmentSettings._dev_secret_key is None:
             DevelopmentSettings._dev_secret_key = secrets.token_urlsafe(32)
-            print("WARNING: Using a generated DEV_SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
+            logger.warning("Using a generated DEV_SECRET_KEY. For consistent sessions across restarts, set DEV_SECRET_KEY environment variable.")
         
         return DevelopmentSettings._dev_secret_key
     
-    # Updated to log a warning instead of raising an error if STRICT_VALIDATION=True
-    @field_validator('STRICT_VALIDATION')
-    def validate_strict_validation(cls, v):
-        # Log warning if STRICT_VALIDATION=True in development
-        if v is True:
-            logger.warning(
-                "STRICT_VALIDATION is set to True in development environment. "
-                "This might make debugging more difficult as validation errors will cause exceptions instead of warnings. "
-                "Consider setting STRICT_VALIDATION=False for easier debugging if needed."
-            )
-        return v
+    # Note that validation is now always enforced across all environments
+    # No special handling for development environment
     
     # Validate that we're using DEBUG or INFO log level in development
     @field_validator('LOG_LEVEL')
@@ -68,4 +59,4 @@ class DevelopmentSettings(BaseAppSettings):
                 "No database connection configured. Please set DB_HOST, DB_USER, "
                 "DB_PASSWORD, and DB_NAME in your .env.development file."
             )
-        return v
+        return v 

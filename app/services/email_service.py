@@ -6,7 +6,8 @@ from email.mime.text import MIMEText
 from typing import List, Optional
 
 from app.core.settings import settings
-from app.core.exceptions import ServiceError
+from app.core.exceptions import ServiceError, InvalidConfigurationError
+from app.core.error_handling import handle_exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class EmailService:
     """
     
     @staticmethod
+    @handle_exceptions(error_message="Failed to send email")
     async def send_email(
         email_configuration,
         recipient_email: str,
@@ -38,35 +40,35 @@ class EmailService:
         Returns:
             True if email was sent successfully, False otherwise
         """
+        # Check if email configuration is complete
+        if not email_configuration.smtp_host or not email_configuration.smtp_user or not email_configuration.smtp_password:
+            logger.error(f"Email configuration {email_configuration.id} has incomplete SMTP settings")
+            raise InvalidConfigurationError(f"Email configuration {email_configuration.id} has incomplete SMTP settings")
+        
+        # Use email configuration settings
+        smtp_host = email_configuration.smtp_host
+        smtp_port = email_configuration.smtp_port
+        smtp_user = email_configuration.smtp_user
+        smtp_password = email_configuration.smtp_password
+        email_from = email_configuration.email_from
+        
+        message = MIMEMultipart('alternative')
+        message['From'] = email_from
+        message['To'] = recipient_email
+        message['Subject'] = subject
+        
+        if cc:
+            message['Cc'] = ', '.join(cc)
+        
+        # Attach text part
+        message.attach(MIMEText(body, 'plain'))
+        
+        # Attach HTML part if provided
+        if html_content:
+            message.attach(MIMEText(html_content, 'html'))
+        
+        # Send the email
         try:
-            # Check if email configuration is complete
-            if not email_configuration.smtp_host or not email_configuration.smtp_user or not email_configuration.smtp_password:
-                logger.error(f"Email configuration {email_configuration.id} has incomplete SMTP settings")
-                return False
-            
-            # Use email configuration settings
-            smtp_host = email_configuration.smtp_host
-            smtp_port = email_configuration.smtp_port
-            smtp_user = email_configuration.smtp_user
-            smtp_password = email_configuration.smtp_password
-            email_from = email_configuration.email_from
-            
-            message = MIMEMultipart('alternative')
-            message['From'] = email_from
-            message['To'] = recipient_email
-            message['Subject'] = subject
-            
-            if cc:
-                message['Cc'] = ', '.join(cc)
-            
-            # Attach text part
-            message.attach(MIMEText(body, 'plain'))
-            
-            # Attach HTML part if provided
-            if html_content:
-                message.attach(MIMEText(html_content, 'html'))
-            
-            # Send the email
             await aiosmtplib.send(
                 message,
                 hostname=smtp_host,
@@ -81,9 +83,10 @@ class EmailService:
             
         except Exception as e:
             logger.error(f"Failed to send email to {recipient_email}: {str(e)}")
-            raise ServiceError("email", "Failed to send email", str(e))
+            raise ServiceError("email", f"Failed to send email to {recipient_email}", str(e))
     
     @staticmethod
+    @handle_exceptions(error_message="Failed to send reminder email")
     async def send_reminder_email(
         email_configuration,
         user,
@@ -141,3 +144,6 @@ class EmailService:
             body=text_content,
             html_content=html_content,
         )
+
+# Create singleton instance
+email_service = EmailService()

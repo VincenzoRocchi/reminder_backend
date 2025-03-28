@@ -17,8 +17,9 @@ from app.models.emailConfigurations import EmailConfiguration
 from app.models.senderIdentities import SenderIdentity
 from app.models.clients import Client
 from app.models.reminderRecipient import ReminderRecipient
-from app.core.exceptions import ServiceError
+from app.core.exceptions import ServiceError, InvalidConfigurationError
 from app.core.settings import settings
+from app.services.notification import notification_service
 
 # Configure module-level logger for this service
 logger = logging.getLogger(__name__)
@@ -53,9 +54,10 @@ class SchedulerService:
         and activates the scheduler. This job frequency represents a balance
         between timely reminder delivery and system load.
         
-        The scheduler will not start if:
-        1. DISABLE_SCHEDULER setting is True (any environment)
-        2. In testing environment only: No reminders are found in the database
+        The scheduler will not start if DISABLE_SCHEDULER setting is True.
+        
+        Returns:
+            bool: True if scheduler was started, False if disabled
         """
         from app.core.settings import settings
         
@@ -64,19 +66,7 @@ class SchedulerService:
         # Check if scheduler should be disabled via configuration
         if getattr(settings, "DISABLE_SCHEDULER", False):
             logger.info("Scheduler disabled via DISABLE_SCHEDULER setting")
-            return
-        
-        # In testing environment, only start if there are reminders
-        if settings.ENV == "testing":
-            db = SessionLocal()
-            try:
-                reminder_count = db.query(Reminder).count()
-                if reminder_count == 0:
-                    logger.info("No reminders found in testing environment. Scheduler will not start.")
-                    return
-                logger.info(f"Found {reminder_count} reminders in testing environment. Starting scheduler.")
-            finally:
-                db.close()
+            return False
         
         # Add job to process reminders every minute
         self.scheduler.add_job(
@@ -88,16 +78,21 @@ class SchedulerService:
         
         # Start the scheduler - after this point, jobs will begin executing
         self.scheduler.start()
+        logger.info("Scheduler service started successfully")
+        return True
     
     async def process_reminders(self):
         """
         Process reminders that are due to be sent.
-        """
-        # In testing environment, check if we should log
-        should_log = settings.ENV != "testing"
         
-        if should_log:
-            logger.info("Processing due reminders")
+        This method:
+        1. Finds all reminders that are due and active
+        2. For each reminder, ensures notification records exist for all recipients
+        3. Processes and sends each notification
+        4. Updates reminder and notification statuses
+        5. Handles recurring reminders
+        """
+        logger.info("Processing due reminders")
         
         db = SessionLocal()
         try:
@@ -113,10 +108,8 @@ class SchedulerService:
                 .all()
             )
             
-            # Skip verbose logging in testing mode if no reminders found
-            if not due_reminders and settings.ENV == "testing":
-                return
-                
+            logger.info(f"Found {len(due_reminders)} due reminders to process")
+            
             for reminder in due_reminders:
                 # Get the user who created the reminder
                 user = db.query(User).filter(User.id == reminder.user_id).first()
@@ -124,109 +117,44 @@ class SchedulerService:
                     logger.warning(f"Skipping reminder {reminder.id}: User {reminder.user_id} not found or inactive")
                     continue
                 
-                # For email reminders, ensure we have a valid email configuration
-                email_configuration = None
-                if reminder.notification_type == NotificationTypeEnum.EMAIL:
-                    if reminder.email_configuration_id:
-                        email_configuration = db.query(EmailConfiguration).filter(
-                            EmailConfiguration.id == reminder.email_configuration_id,
-                            EmailConfiguration.user_id == user.id,
-                            EmailConfiguration.is_active == True
-                        ).first()
-                    
-                    if not email_configuration:
-                        logger.warning(f"Skipping reminder {reminder.id}: No active email configuration found")
-                        continue
-                
-                # Get sender identity if specified
-                sender_identity = None
-                if reminder.sender_identity_id:
-                    sender_identity = db.query(SenderIdentity).filter(
-                        SenderIdentity.id == reminder.sender_identity_id,
-                        SenderIdentity.user_id == user.id
-                    ).first()
-                    
-                    if not sender_identity:
-                        logger.warning(f"Reminder {reminder.id} specified sender_identity_id {reminder.sender_identity_id} which was not found")
-                
-                # Get all clients for this reminder
-                recipient_mappings = (
-                    db.query(ReminderRecipient)
-                    .filter(ReminderRecipient.reminder_id == reminder.id)
-                    .all()
-                )
-                
-                client_ids = [mapping.client_id for mapping in recipient_mappings]
-                clients = db.query(Client).filter(Client.id.in_(client_ids), Client.is_active == True).all()
-                
-                # Process each client
-                for client in clients:
-                    # Check if a notification already exists
-                    existing_notification = (
-                        db.query(Notification)
-                        .filter(
-                            Notification.reminder_id == reminder.id,
-                            Notification.client_id == client.id,
-                            Notification.status.in_([NotificationStatusEnum.PENDING, NotificationStatusEnum.SENT])
-                        )
-                        .first()
+                try:
+                    # Generate notifications for this reminder
+                    # This ensures that we have a notification record for each client
+                    notifications = notification_service.generate_notifications_for_reminder(
+                        db,
+                        reminder_id=reminder.id,
+                        user_id=reminder.user_id
                     )
                     
-                    # Skip if already processed
-                    if existing_notification and existing_notification.status == NotificationStatusEnum.SENT:
+                    if not notifications:
+                        logger.warning(f"No notifications generated for reminder {reminder.id}: No active clients found")
                         continue
+                        
+                    logger.info(f"Generated {len(notifications)} notifications for reminder {reminder.id}")
                     
-                    # Create a new notification if one doesn't exist
-                    if not existing_notification:
-                        notification = Notification(
-                            reminder_id=reminder.id,
-                            client_id=client.id,
-                            notification_type=reminder.notification_type,
-                            message=reminder.description,
-                            status=NotificationStatusEnum.PENDING
-                        )
-                        db.add(notification)
-                        db.commit()
-                        db.refresh(notification)
-                    else:
-                        notification = existing_notification
-                    
-                    # Send the notification
-                    success = await self.send_notification(
-                        notification_type=reminder.notification_type,
-                        email_configuration=email_configuration,  # Only used for email
-                        sender_identity=sender_identity,
-                        user=user,
-                        client=client,
+                    # Process the reminder notifications
+                    await notification_service.create_and_send_notifications_for_reminder(
+                        db, 
                         reminder=reminder
                     )
                     
-                    # Update notification status
-                    notification.sent_at = datetime.now()
-                    if success:
-                        notification.status = NotificationStatusEnum.SENT
-                    else:
-                        notification.status = NotificationStatusEnum.FAILED
-                        notification.error_message = "Failed to send notification"
-                    
-                    db.add(notification)
-                
-                # Handle recurring reminders
-                if reminder.is_recurring and reminder.recurrence_pattern:
-                    next_date = self.calculate_next_reminder_date(
-                        reminder.reminder_date, reminder.recurrence_pattern
-                    )
-                    if next_date:
-                        reminder.reminder_date = next_date
-                    else:
-                        reminder.is_active = False
-                else:
-                    reminder.is_active = False
-                
-                db.add(reminder)
-                
-            db.commit()
-            
+                    # Handle recurring reminders
+                    if reminder.is_recurring and reminder.recurrence_pattern:
+                        next_date = self.calculate_next_reminder_date(
+                            reminder.reminder_date, reminder.recurrence_pattern
+                        )
+                        if next_date:
+                            reminder.reminder_date = next_date
+                            db.add(reminder)
+                            db.commit()
+                            logger.info(f"Updated recurring reminder {reminder.id} with next date: {next_date}")
+                        else:
+                            logger.warning(f"Could not calculate next date for recurring reminder {reminder.id}")
+                            
+                except Exception as e:
+                    logger.error(f"Error processing reminder {reminder.id}: {str(e)}", exc_info=True)
+                    continue
+                        
         except Exception as e:
             logger.error(f"Error processing reminders: {str(e)}", exc_info=True)
         finally:
@@ -242,52 +170,67 @@ class SchedulerService:
         sender_identity=None,
     ) -> bool:
         """
-        Send a notification based on the specified type and details.
+        Send a notification of the specified type.
         
         Args:
-            notification_type: Type of notification (EMAIL, SMS, WHATSAPP)
-            user: User sending the reminder
-            client: Client receiving the reminder
-            reminder: Reminder details
-            email_configuration: Configuration for sending emails (only used for EMAIL type)
-            sender_identity: Optional identity information for display to recipient
+            notification_type: Type of notification to send
+            user: User object
+            client: Client object
+            reminder: Reminder object
+            email_configuration: Optional email configuration
+            sender_identity: Optional sender identity
             
         Returns:
-            True if notification was sent successfully, False otherwise
+            bool: True if notification sent successfully, False otherwise
+            
+        Raises:
+            ServiceError: If notification sending fails
         """
         try:
             if notification_type == NotificationTypeEnum.EMAIL:
-                # For email, we use email configurations
                 if not client.email:
-                    logger.warning(f"Cannot send email notification: Missing email for client {client.id}")
-                    return False
+                    logger.error(f"Cannot send email notification: Client {client.id} has no email address")
+                    raise ServiceError("notification", f"Client {client.id} has no email address")
                 
                 if not email_configuration:
-                    logger.warning(f"Cannot send email: No email configuration for reminder {reminder.id}")
-                    return False
+                    logger.error(f"Cannot send email notification: No email configuration provided")
+                    raise ServiceError("notification", "No email configuration provided for email notification")
                 
-                return await EmailService.send_reminder_email(
+                # Use email_configuration to send the email
+                recipient_email = client.email
+                subject = f"Reminder: {reminder.title}"
+                body = reminder.description or "You have a reminder."
+                
+                # Generate HTML content for the email
+                html_content = f"""
+                <html>
+                <body>
+                    <h1>{reminder.title}</h1>
+                    <p>{reminder.description or ""}</p>
+                    <p>This is an automated reminder from {user.business_name or user.first_name}.</p>
+                </body>
+                </html>
+                """
+                
+                # Use the EmailService to send the email
+                return await EmailService.send_email(
                     email_configuration=email_configuration,
-                    user=user,
-                    recipient_email=client.email,
-                    reminder_title=reminder.title,
-                    reminder_description=reminder.description or "",
-                    sender_identity=sender_identity
+                    recipient_email=recipient_email,
+                    subject=subject,
+                    body=body,
+                    html_content=html_content
                 )
                 
             elif notification_type == NotificationTypeEnum.SMS:
-                # Determine which phone number to use for recipient
-                recipient_phone = None
-                if hasattr(client, 'preferred_contact_method') and client.preferred_contact_method == "SMS" and hasattr(client, 'secondary_phone_number') and client.secondary_phone_number:
-                    recipient_phone = client.secondary_phone_number
-                else:
-                    recipient_phone = client.phone_number
-                    
-                if not recipient_phone:
-                    logger.warning(f"Cannot send SMS notification: Missing phone number for client {client.id}")
-                    return False
+                # Check if client has a phone number
+                if not client.phone_number:
+                    logger.error(f"Cannot send SMS notification: Client {client.id} has no phone number")
+                    raise ServiceError("notification", f"Client {client.id} has no phone number")
                 
-                # Determine which phone number to use for sender (from number)
+                # Use the TwilioService to send the SMS
+                recipient_phone = client.phone_number
+                
+                # Determine sender phone number
                 from_phone_number = None
                 
                 # First check if we have a sender identity with a PHONE type
@@ -301,7 +244,7 @@ class SchedulerService:
                 
                 if not from_phone_number:
                     logger.error(f"Cannot send SMS notification: No sender phone number available")
-                    return False
+                    raise ServiceError("notification", "No sender phone number available for SMS notification")
                 
                 # Use the TwilioService to send SMS
                 return TwilioService.send_reminder_message(
@@ -315,23 +258,20 @@ class SchedulerService:
                 )
                 
             elif notification_type == NotificationTypeEnum.WHATSAPP:
-                # Determine which phone number to use for recipient
+                # Check if client has a WhatsApp phone number
                 recipient_phone = None
-                if hasattr(client, 'preferred_contact_method') and client.preferred_contact_method == "WHATSAPP":
-                    if hasattr(client, 'whatsapp_phone_number') and client.whatsapp_phone_number:
-                        recipient_phone = client.whatsapp_phone_number
-                    elif hasattr(client, 'secondary_phone_number') and client.secondary_phone_number:
-                        recipient_phone = client.secondary_phone_number
-                    else:
-                        recipient_phone = client.phone_number
-                else:
+                if client.whatsapp_phone_number:
+                    recipient_phone = client.whatsapp_phone_number
+                    logger.info(f"Using client's WhatsApp number {recipient_phone}")
+                elif client.phone_number:
                     recipient_phone = client.phone_number
-                    
-                if not recipient_phone:
-                    logger.warning(f"Cannot send WhatsApp notification: Missing phone number for client {client.id}")
-                    return False
+                    logger.info(f"Using client's regular phone number {recipient_phone} for WhatsApp")
                 
-                # Determine which phone number to use for sender (from number)
+                if not recipient_phone:
+                    logger.error(f"Cannot send WhatsApp notification: Client {client.id} has no phone number")
+                    raise ServiceError("notification", f"Client {client.id} has no phone number for WhatsApp")
+                
+                # Determine sender phone number
                 from_phone_number = None
                 
                 # First check if we have a sender identity with a PHONE type
@@ -345,7 +285,7 @@ class SchedulerService:
                 
                 if not from_phone_number:
                     logger.error(f"Cannot send WhatsApp notification: No sender phone number available")
-                    return False
+                    raise ServiceError("notification", "No sender phone number available for WhatsApp notification")
                 
                 # Use the TwilioService to send WhatsApp
                 return TwilioService.send_reminder_message(
@@ -359,104 +299,140 @@ class SchedulerService:
                 )
             
             logger.error(f"Unsupported notification type: {notification_type}")
-            return False
+            raise ServiceError("notification", f"Unsupported notification type: {notification_type}")
             
         except ServiceError as se:
             logger.error(f"Service error: {se.message}", exc_info=True)
-            return False
+            raise  # Re-raise service errors
         except Exception as e:
             logger.error(f"Error sending {notification_type} notification: {str(e)}", exc_info=True)
-            return False
+            raise ServiceError("notification", f"Failed to send {notification_type} notification", str(e))
         
     def calculate_next_reminder_date(self, current_date: datetime, pattern: str) -> datetime:
         """
-        Calculate the next reminder date based on the recurrence pattern.
-        
-        Supports various recurrence patterns including:
-        - Simple periods: daily, weekly, monthly, yearly
-        - Complex patterns: "every X days/weeks/months"
+        Calculate the next date a reminder should be sent based on a pattern.
         
         Args:
-            current_date: Base date to calculate from
-            pattern: Text description of recurrence (e.g., 'daily', 'weekly', 'every 2 weeks')
+            current_date: The current date to calculate from
+            pattern: The recurrence pattern (DAILY, WEEKLY_MON, MONTHLY_1, etc.)
             
         Returns:
-            Next reminder date or None if pattern is invalid
+            datetime: The next date the reminder should be sent
+            
+        Raises:
+            InvalidConfigurationError: If the pattern is invalid or unsupported
         """
         try:
-            # Normalize pattern for case-insensitive matching
-            pattern = pattern.lower()
+            if not pattern or pattern == "ONCE":
+                # For one-time reminders, there is no next occurrence
+                raise InvalidConfigurationError(f"Cannot calculate next date for pattern: {pattern}")
+                
+            # Get just the date part, with time set to midnight
+            current_date = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
             
-            # Handle simple recurring patterns
-            if pattern == 'daily':
+            # For daily reminders
+            if pattern == "DAILY":
                 return current_date + timedelta(days=1)
-            
-            elif pattern == 'weekly':
-                return current_date + timedelta(weeks=1)
-            
-            elif pattern == 'monthly':
-                # Monthly calculation requires special handling for different month lengths
-                new_month = current_date.month + 1
-                new_year = current_date.year
                 
-                # Handle year rollover if needed
-                if new_month > 12:
-                    new_month = 1
-                    new_year += 1
+            # For weekly reminders
+            elif pattern.startswith("WEEKLY_"):
+                days_of_week = {
+                    "MON": 0, "TUE": 1, "WED": 2, "THU": 3, 
+                    "FRI": 4, "SAT": 5, "SUN": 6
+                }
+                target_day = pattern.split("_")[1]
                 
-                # Handle month length differences
-                day = min(current_date.day, 28)  # Simple handling for month lengths
+                if target_day not in days_of_week:
+                    raise InvalidConfigurationError(f"Invalid weekly pattern: {pattern}")
+                    
+                days_ahead = days_of_week[target_day] - current_date.weekday()
+                if days_ahead <= 0:  # Target day already passed this week
+                    days_ahead += 7
                 
-                return current_date.replace(year=new_year, month=new_month, day=day)
-            
-            elif pattern == 'yearly':
-                # Simple yearly recurrence - same month/day, next year
-                return current_date.replace(year=current_date.year + 1)
-            
-            # Handle complex patterns with a quantity and unit
-            # Format: "every X days/weeks/months"
-            elif pattern.startswith('every '):
-                # Split into components: ["every", "X", "days"]
-                parts = pattern.split()
-                if len(parts) >= 3:
-                    try:
-                        # Extract the numerical multiplier
-                        number = int(parts[1])
-                        # Extract the time unit (singular or plural)
-                        unit = parts[2].lower()
+                return current_date + timedelta(days=days_ahead)
+                
+            # For monthly reminders
+            elif pattern.startswith("MONTHLY_"):
+                try:
+                    # Get day of month (e.g., MONTHLY_15 for 15th of each month)
+                    day_of_month = int(pattern.split("_")[1])
+                    
+                    if day_of_month < 1 or day_of_month > 31:
+                        raise InvalidConfigurationError(f"Invalid monthly pattern day: {pattern}")
                         
-                        # Apply multiplier based on time unit
-                        if unit in ('day', 'days'):
-                            return current_date + timedelta(days=number)
-                        elif unit in ('week', 'weeks'):
-                            return current_date + timedelta(weeks=number)
-                        elif unit in ('month', 'months'):
-                            # Calculate multi-month increments
-                            new_month = current_date.month + number
-                            new_year = current_date.year
-                            
-                            # Handle year rollovers for multi-month increments
-                            while new_month > 12:
-                                new_month -= 12
-                                new_year += 1
-                            
-                            # Handle month length differences
-                            day = min(current_date.day, 28)
-                            
-                            return current_date.replace(year=new_year, month=new_month, day=day)
+                    next_date = current_date.replace(day=1) + timedelta(days=32)  # Move to next month
+                    next_date = next_date.replace(day=1)  # First day of next month
+                    
+                    # Try to set the specific day
+                    try:
+                        next_date = next_date.replace(day=day_of_month)
                     except ValueError:
-                        # Handle non-numeric values in the pattern
-                        logger.warning(f"Invalid numeric value in pattern: {pattern}")
-                        pass
+                        # Handle months with fewer days
+                        if day_of_month > 28:
+                            # Set to last day of month
+                            next_month = next_date.replace(day=1, month=next_date.month+1 if next_date.month < 12 else 1, 
+                                                        year=next_date.year if next_date.month < 12 else next_date.year+1)
+                            next_date = next_month - timedelta(days=1)
+                    
+                    # If the calculated date is in the current month and has already passed
+                    if next_date.month == current_date.month and next_date.day < current_date.day:
+                        next_date = next_date.replace(month=next_date.month+1 if next_date.month < 12 else 1,
+                                                    year=next_date.year if next_date.month < 12 else next_date.year+1)
+                        
+                        # Handle months with fewer days again
+                        try:
+                            next_date = next_date.replace(day=day_of_month)
+                        except ValueError:
+                            # Set to last day of month
+                            next_month = next_date.replace(day=1, month=next_date.month+1 if next_date.month < 12 else 1, 
+                                                        year=next_date.year if next_date.month < 12 else next_date.year+1)
+                            next_date = next_month - timedelta(days=1)
+                    
+                    return next_date
+                    
+                except (ValueError, IndexError):
+                    raise InvalidConfigurationError(f"Invalid monthly pattern format: {pattern}")
+                    
+            # For yearly reminders
+            elif pattern.startswith("YEARLY_"):
+                try:
+                    # Format is YEARLY_MM_DD (e.g., YEARLY_12_25 for December 25)
+                    parts = pattern.split("_")
+                    if len(parts) != 3:
+                        raise InvalidConfigurationError(f"Invalid yearly pattern format: {pattern}")
+                        
+                    month = int(parts[1])
+                    day = int(parts[2])
+                    
+                    if month < 1 or month > 12 or day < 1 or day > 31:
+                        raise InvalidConfigurationError(f"Invalid month/day in yearly pattern: {pattern}")
+                    
+                    # Try for this year first
+                    try:
+                        next_date = current_date.replace(month=month, day=day)
+                    except ValueError:
+                        # Handle invalid dates like February 30
+                        raise InvalidConfigurationError(f"Invalid date in yearly pattern: {pattern}")
+                    
+                    # If the date has already passed this year, move to next year
+                    if next_date < current_date:
+                        next_date = next_date.replace(year=current_date.year + 1)
+                    
+                    return next_date
+                    
+                except (ValueError, IndexError):
+                    raise InvalidConfigurationError(f"Invalid yearly pattern format: {pattern}")
             
-            # If pattern format is not recognized
-            logger.warning(f"Unrecognized recurrence pattern: {pattern}")
-            return None
+            # Unsupported pattern
+            raise InvalidConfigurationError(f"Unsupported reminder pattern: {pattern}")
             
+        except InvalidConfigurationError as ice:
+            # Re-raise application exceptions
+            raise
         except Exception as e:
             # Log detailed error for debugging
             logger.error(f"Error calculating next reminder date: {str(e)}", exc_info=True)
-            return None
+            raise InvalidConfigurationError(f"Failed to calculate next date for pattern: {pattern}")
         
     def __str__(self):
         """

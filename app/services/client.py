@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.repositories.client import client_repository
 from app.schemas.clients import ClientCreate, ClientUpdate, Client, ClientDetail
 from app.core.exceptions import ClientNotFoundError, ClientAlreadyExistsError
+from app.core.error_handling import handle_exceptions, with_transaction
 
 class ClientService:
     """
@@ -14,6 +15,7 @@ class ClientService:
     def __init__(self):
         self.repository = client_repository
     
+    @handle_exceptions(error_message="Failed to get client")
     def get_client(self, db: Session, *, client_id: int, user_id: int) -> Client:
         """
         Get a client by ID.
@@ -34,6 +36,7 @@ class ClientService:
             raise ClientNotFoundError(f"Client with ID {client_id} not found")
         return client
     
+    @handle_exceptions(error_message="Failed to get client by email")
     def get_client_by_email(
         self, 
         db: Session, 
@@ -54,6 +57,7 @@ class ClientService:
         """
         return self.repository.get_by_email(db, email=email, user_id=user_id)
     
+    @handle_exceptions(error_message="Failed to get client by phone number")
     def get_client_by_phone_number(
         self, 
         db: Session, 
@@ -72,13 +76,10 @@ class ClientService:
         Returns:
             Optional[Client]: Client if found, None otherwise
         """
-        return self.repository.get_by_phone_number(
-            db, 
-            phone_number=phone_number, 
-            user_id=user_id
-        )
+        return self.repository.get_by_phone_number(db, phone_number=phone_number, user_id=user_id)
     
-    def get_user_clients(
+    @handle_exceptions(error_message="Failed to get clients by user ID")
+    def get_clients_by_user_id(
         self, 
         db: Session, 
         *, 
@@ -103,7 +104,7 @@ class ClientService:
             List[Client]: List of clients
         """
         return self.repository.get_by_user_id(
-            db,
+            db, 
             user_id=user_id,
             skip=skip,
             limit=limit,
@@ -111,108 +112,77 @@ class ClientService:
             search=search
         )
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to create client")
     def create_client(self, db: Session, *, client_in: ClientCreate, user_id: int) -> Client:
         """
         Create a new client.
         
         Args:
             db: Database session
-            client_in: Client creation data
-            user_id: User ID
+            client_in: Client creation schema
+            user_id: User ID to associate with the client
             
         Returns:
             Client: Created client
             
         Raises:
-            ClientAlreadyExistsError: If client with same email/phone exists
+            ClientAlreadyExistsError: If client with same email exists
         """
-        # Check for existing client with same email
+        # Check if client with same email exists for this user
         if client_in.email:
-            existing_client = self.get_client_by_email(db, email=client_in.email, user_id=user_id)
+            existing_client = self.repository.get_by_email(db, email=client_in.email, user_id=user_id)
             if existing_client:
-                raise ClientAlreadyExistsError(
-                    f"Client with email {client_in.email} already exists"
-                )
+                raise ClientAlreadyExistsError(f"Client with email {client_in.email} already exists")
         
-        # Check for existing client with same phone number
-        if client_in.phone_number:
-            existing_client = self.get_client_by_phone_number(
-                db, 
-                phone_number=client_in.phone_number, 
-                user_id=user_id
-            )
-            if existing_client:
-                raise ClientAlreadyExistsError(
-                    f"Client with phone number {client_in.phone_number} already exists"
-                )
-        
-        # Create client with user_id
-        obj_in_data = client_in.model_dump()
-        db_obj = self.repository.model(**obj_in_data)
-        db_obj.user_id = user_id
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        # Prepare data with user_id
+        if isinstance(client_in, dict):
+            obj_data = client_in.copy()
+            obj_data["user_id"] = user_id
+        else:
+            obj_data = client_in.model_dump()
+            obj_data["user_id"] = user_id
+            
+        return self.repository.create(db, obj_in=obj_data)
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to update client")
     def update_client(
         self, 
         db: Session, 
         *, 
-        client_id: int,
-        user_id: int,
-        client_in: ClientUpdate | Dict[str, Any]
+        client_id: int, 
+        client_in: ClientUpdate, 
+        user_id: int
     ) -> Client:
         """
-        Update a client.
+        Update an existing client.
         
         Args:
             db: Database session
             client_id: Client ID
-            user_id: User ID
-            client_in: Update data
+            client_in: Client update schema
+            user_id: User ID for authorization
             
         Returns:
             Client: Updated client
             
         Raises:
             ClientNotFoundError: If client not found
-            ClientAlreadyExistsError: If new email/phone conflicts with existing client
+            ClientAlreadyExistsError: If updated email conflicts with existing client
         """
         client = self.get_client(db, client_id=client_id, user_id=user_id)
         
-        # If email is being updated, check for conflicts
-        if isinstance(client_in, dict):
-            email = client_in.get("email")
-        else:
-            email = client_in.email
-            
-        if email and email != client.email:
-            existing_client = self.get_client_by_email(db, email=email, user_id=user_id)
+        # Check for email conflicts if email is being changed
+        if hasattr(client_in, 'email') and client_in.email and client_in.email != client.email:
+            existing_client = self.repository.get_by_email(db, email=client_in.email, user_id=user_id)
             if existing_client:
-                raise ClientAlreadyExistsError(
-                    f"Client with email {email} already exists"
-                )
-        
-        # If phone number is being updated, check for conflicts
-        if isinstance(client_in, dict):
-            phone_number = client_in.get("phone_number")
-        else:
-            phone_number = client_in.phone_number
-            
-        if phone_number and phone_number != client.phone_number:
-            existing_client = self.get_client_by_phone_number(
-                db, 
-                phone_number=phone_number, 
-                user_id=user_id
-            )
-            if existing_client:
-                raise ClientAlreadyExistsError(
-                    f"Client with phone number {phone_number} already exists"
-                )
-        
+                raise ClientAlreadyExistsError(f"Client with email {client_in.email} already exists")
+                
         return self.repository.update(db, db_obj=client, obj_in=client_in)
     
+    @with_transaction
+    @handle_exceptions(error_message="Failed to delete client")
     def delete_client(self, db: Session, *, client_id: int, user_id: int) -> Client:
         """
         Delete a client.
@@ -220,7 +190,7 @@ class ClientService:
         Args:
             db: Database session
             client_id: Client ID
-            user_id: User ID
+            user_id: User ID for authorization
             
         Returns:
             Client: Deleted client
@@ -230,6 +200,34 @@ class ClientService:
         """
         client = self.get_client(db, client_id=client_id, user_id=user_id)
         return self.repository.delete(db, id=client_id)
+    
+    @with_transaction
+    @handle_exceptions(error_message="Failed to mark client as active/inactive")
+    def set_client_active_status(
+        self, 
+        db: Session, 
+        *, 
+        client_id: int, 
+        user_id: int, 
+        is_active: bool
+    ) -> Client:
+        """
+        Set a client's active status.
+        
+        Args:
+            db: Database session
+            client_id: Client ID
+            user_id: User ID for authorization
+            is_active: New active status
+            
+        Returns:
+            Client: Updated client
+            
+        Raises:
+            ClientNotFoundError: If client not found
+        """
+        client = self.get_client(db, client_id=client_id, user_id=user_id)
+        return self.repository.update(db, db_obj=client, obj_in={"is_active": is_active})
     
     def get_active_clients(
         self, 

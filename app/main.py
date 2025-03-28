@@ -136,8 +136,12 @@ async def startup_event():
     
     # Import here to avoid circular imports
     from app.services.scheduler_service import scheduler_service
-    scheduler_service.start()
-    logger.info("Scheduler service started")
+    scheduler_started = scheduler_service.start()
+    
+    if scheduler_started:
+        logger.info("Scheduler service is active and processing reminders")
+    else:
+        logger.info("Scheduler service is disabled for this environment")
 
 # Register shutdown event to gracefully stop services
 @app.on_event("shutdown")

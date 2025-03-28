@@ -39,7 +39,7 @@ async def create_email_configuration(
     """
     return email_configuration_service.create_email_configuration(
         db,
-        config_in=config_in,
+        obj_in=config_in,
         user_id=current_user.id
     )
 
