@@ -2,9 +2,12 @@
 import logging
 from twilio.rest import Client
 from typing import Optional, Literal, Tuple
+from sqlalchemy.orm import Session
 
 from app.core.settings import settings
 from app.core.exceptions import ServiceError
+from app.core.error_handling import with_transaction
+from app.repositories.user import user_repository
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,7 @@ class TwilioService:
         from_phone_number: str,
         channel: Literal["sms", "whatsapp"] = "sms",
         track_usage: bool = True,
+        db: Optional[Session] = None
     ) -> bool:
         """
         Send a message via SMS or WhatsApp using Twilio.
@@ -60,6 +64,7 @@ class TwilioService:
             from_phone_number: Phone number to send from (client's Twilio number)
             channel: Channel to use ("sms" or "whatsapp")
             track_usage: Whether to track usage for billing
+            db: Optional database session (for transaction-aware usage tracking)
             
         Returns:
             True if message was sent successfully, False otherwise
@@ -106,26 +111,8 @@ class TwilioService:
             logger.info(f"{channel.upper()} sent to {recipient_phone} from {from_phone_number}, SID: {message_result.sid}")
             
             # Track usage for billing if requested
-            if track_usage and user:
-                # In production, use a non-blocking approach like a background task
-                # or message queue to avoid slowing down the request
-                from app.database import SessionLocal
-                db = SessionLocal()
-                try:
-                    # Update the appropriate counter based on channel
-                    if channel == "whatsapp":
-                        user.whatsapp_count = user.whatsapp_count + 1 if hasattr(user, 'whatsapp_count') else 1
-                    else:  # SMS
-                        user.sms_count = user.sms_count + 1 if hasattr(user, 'sms_count') else 1
-                    
-                    db.add(user)
-                    db.commit()
-                    logger.info(f"{channel.upper()} usage tracked for user {user.id}")
-                except Exception as e:
-                    logger.error(f"Failed to track {channel.upper()} usage: {str(e)}")
-                    db.rollback()
-                finally:
-                    db.close()
+            if track_usage and user and db:
+                TwilioService.track_message_usage(db, user.id, channel)
             
             return True
             
@@ -134,12 +121,58 @@ class TwilioService:
             raise ServiceError(channel, f"Failed to send {channel}", str(e))
     
     @staticmethod
+    @with_transaction
+    def track_message_usage(
+        db: Session, 
+        user_id: int, 
+        channel: Literal["sms", "whatsapp"],
+        **kwargs
+    ) -> bool:
+        """
+        Track message usage for a user (transaction-aware).
+        
+        Args:
+            db: Database session
+            user_id: ID of the user
+            channel: Channel used ("sms" or "whatsapp")
+            
+        Returns:
+            bool: True if usage tracked successfully
+        """
+        try:
+            # Get the user
+            user = user_repository.get(db, id=user_id)
+            if not user:
+                logger.warning(f"User {user_id} not found for tracking {channel} usage")
+                return False
+            
+            # Update usage count based on channel
+            update_data = {}
+            if channel == "whatsapp":
+                current_count = getattr(user, 'whatsapp_count', 0) or 0
+                update_data['whatsapp_count'] = current_count + 1
+            else:  # SMS
+                current_count = getattr(user, 'sms_count', 0) or 0
+                update_data['sms_count'] = current_count + 1
+            
+            # Update the user record
+            user_repository.update(db, db_obj=user, obj_in=update_data)
+            logger.info(f"{channel.upper()} usage tracked for user {user_id}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to track {channel.upper()} usage: {str(e)}")
+            return False
+    
+    @staticmethod
     def send_sms(
         user,
         recipient_phone: str,
         message: str,
         from_phone_number: str,
         track_usage: bool = True,
+        db: Optional[Session] = None
     ) -> bool:
         """
         Send an SMS via Twilio (convenience method).
@@ -150,6 +183,7 @@ class TwilioService:
             message: Content of the SMS
             from_phone_number: Phone number to send from (client's Twilio number)
             track_usage: Whether to track usage for billing
+            db: Optional database session (for transaction-aware usage tracking)
             
         Returns:
             True if SMS was sent successfully, False otherwise
@@ -160,7 +194,8 @@ class TwilioService:
             message=message,
             from_phone_number=from_phone_number,
             channel="sms",
-            track_usage=track_usage
+            track_usage=track_usage,
+            db=db
         )
     
     @staticmethod
@@ -170,6 +205,7 @@ class TwilioService:
         message: str,
         from_phone_number: str,
         track_usage: bool = True,
+        db: Optional[Session] = None
     ) -> bool:
         """
         Send a WhatsApp message via Twilio (convenience method).
@@ -180,6 +216,7 @@ class TwilioService:
             message: Content of the WhatsApp message
             from_phone_number: Phone number to send from (client's Twilio number)
             track_usage: Whether to track usage for billing
+            db: Optional database session (for transaction-aware usage tracking)
             
         Returns:
             True if WhatsApp message was sent successfully, False otherwise
@@ -190,7 +227,8 @@ class TwilioService:
             message=message,
             from_phone_number=from_phone_number,
             channel="whatsapp",
-            track_usage=track_usage
+            track_usage=track_usage,
+            db=db
         )
     
     @staticmethod
@@ -202,6 +240,7 @@ class TwilioService:
         reminder_description: Optional[str] = None,
         sender_identity = None,
         channel: Literal["sms", "whatsapp"] = "sms",
+        db: Optional[Session] = None
     ) -> bool:
         """
         Send a reminder message via SMS or WhatsApp.
@@ -214,6 +253,7 @@ class TwilioService:
             reminder_description: Description of the reminder
             sender_identity: Optional SenderIdentity object for customizing from name
             channel: Channel to use ("sms" or "whatsapp")
+            db: Optional database session (for transaction-aware usage tracking)
             
         Returns:
             True if message was sent successfully, False otherwise
@@ -247,5 +287,6 @@ class TwilioService:
             recipient_phone=recipient_phone,
             message=message,
             from_phone_number=from_phone_number,
-            channel=channel
+            channel=channel,
+            db=db
         ) 

@@ -10,6 +10,7 @@ from app.database import engine, Base
 from app.core.logging_setup import setup_logging
 from app.core.exception_handlers import register_exception_handlers
 from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+from app.events.monitoring import monitoring_router
 
 # Set up logging first
 setup_logging()
@@ -59,6 +60,9 @@ app.add_middleware(
 # Mount the main API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# Mount the event monitoring router for admin access
+app.include_router(monitoring_router, prefix=settings.API_V1_STR)
+
 # Create tables in the database if using SQLite (testing)
 if settings.SQLALCHEMY_DATABASE_URI.startswith('sqlite'):
     Base.metadata.create_all(bind=engine)
@@ -83,10 +87,14 @@ async def startup_event():
     """Initialize services when application starts"""
     logger.info(f"Starting application in {settings.ENV} environment")
     
-    # Set up event system
+    # Set up event system with event recovery enabled
     from app.events import setup_event_system
-    event_system = setup_event_system()
-    logger.info("Event system initialized and handlers registered")
+    event_system = setup_event_system(recover_events=True, recovery_limit=100)
+    logger.info("Event system initialized with recovery enabled")
+    
+    # Ensure event store tables are created
+    from app.events.persistence import event_store
+    logger.info("Event persistence tables initialized")
     
     # Run security checks
     from app.core.security_checker import check_security_at_startup

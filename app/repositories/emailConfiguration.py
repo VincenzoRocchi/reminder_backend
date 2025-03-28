@@ -108,6 +108,64 @@ class EmailConfigurationRepository(BaseRepository[EmailConfiguration, EmailConfi
                 self.model.email_from == email_from
             )
         ).first()
+    
+    def get_default(
+        self, 
+        db: Session, 
+        *, 
+        user_id: int
+    ) -> Optional[EmailConfiguration]:
+        """
+        Get the default email configuration for a user.
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            
+        Returns:
+            Optional[EmailConfiguration]: Default email configuration if found, None otherwise
+        """
+        return db.query(self.model).filter(
+            and_(
+                self.model.user_id == user_id,
+                self.model.is_default == True
+            )
+        ).first()
+    
+    def set_default(
+        self, 
+        db: Session, 
+        *, 
+        email_configuration_id: int,
+        user_id: int
+    ) -> EmailConfiguration:
+        """
+        Set an email configuration as default for a user.
+        This will unset any existing default configuration.
+        
+        Args:
+            db: Database session
+            email_configuration_id: ID of the configuration to set as default
+            user_id: User ID
+            
+        Returns:
+            EmailConfiguration: Updated email configuration
+        """
+        # Clear current default
+        db.query(self.model).filter(
+            and_(
+                self.model.user_id == user_id,
+                self.model.is_default == True
+            )
+        ).update({"is_default": False})
+        
+        # Set new default
+        config = db.query(self.model).filter(self.model.id == email_configuration_id).first()
+        config.is_default = True
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+        return config
 
 # Create singleton instance
 email_configuration_repository = EmailConfigurationRepository(EmailConfiguration) 

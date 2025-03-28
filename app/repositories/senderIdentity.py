@@ -120,14 +120,16 @@ class SenderIdentityRepository(BaseRepository[SenderIdentity, SenderIdentityCrea
         db: Session, 
         *, 
         user_id: int,
+        identity_type: IdentityTypeEnum,
         value: str
     ) -> Optional[SenderIdentity]:
         """
-        Get a sender identity by value for a user.
+        Get a sender identity by value and type for a user.
         
         Args:
             db: Database session
             user_id: User ID
+            identity_type: Type of identity
             value: Identity value (phone number or email)
             
         Returns:
@@ -136,6 +138,7 @@ class SenderIdentityRepository(BaseRepository[SenderIdentity, SenderIdentityCrea
         return db.query(self.model).filter(
             and_(
                 self.model.user_id == user_id,
+                self.model.identity_type == identity_type,
                 self.model.value == value
             )
         ).first()

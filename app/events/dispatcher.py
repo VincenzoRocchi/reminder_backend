@@ -20,17 +20,70 @@ from .base import Event
 from .exceptions import EventHandlerError, EventDispatchError, EventRetryError
 from .persistence import event_store
 from app.core.error_handling import handle_exceptions
+from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Retry configuration
-DEFAULT_MAX_RETRIES = 3
-DEFAULT_RETRY_DELAY = 1.0  # seconds
-DEFAULT_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+# Retry configuration from settings
+DEFAULT_MAX_RETRIES = settings.EVENT_MAX_RETRIES
+DEFAULT_RETRY_DELAY = settings.EVENT_RETRY_DELAY
+DEFAULT_RETRY_BACKOFF = settings.EVENT_RETRY_BACKOFF
 
 # Event persistence flag - determines if events should be stored persistently
-# Can be configured based on environment
-PERSIST_EVENTS = True
+# Controlled via settings
+PERSIST_EVENTS = settings.EVENT_PERSISTENCE_ENABLED
+
+# Retry handling
+class RetryPolicy:
+    """
+    Defines the retry behavior for event handlers.
+    
+    This class contains the configuration for how events should be
+    retried in case of handler failures.
+    """
+    
+    def __init__(
+        self,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_delay: float = DEFAULT_RETRY_DELAY,
+        backoff_factor: float = DEFAULT_RETRY_BACKOFF,
+        jitter: bool = True
+    ):
+        """
+        Initialize the retry policy.
+        
+        Args:
+            max_retries: Maximum number of retry attempts
+            retry_delay: Initial delay between retries in seconds
+            backoff_factor: Multiplier for exponential backoff
+            jitter: Whether to add random jitter to retry delays
+        """
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.backoff_factor = backoff_factor
+        self.jitter = jitter
+    
+    def get_next_retry_delay(self, attempt: int) -> float:
+        """
+        Calculate the delay for the next retry attempt.
+        
+        Args:
+            attempt: The retry attempt number (1-based)
+            
+        Returns:
+            Delay in seconds before the next retry
+        """
+        if attempt <= 0:
+            return 0
+            
+        delay = self.retry_delay * (self.backoff_factor ** (attempt - 1))
+        
+        if self.jitter:
+            # Add random jitter (±20%)
+            jitter_multiplier = 1 + random.uniform(-0.2, 0.2)
+            delay *= jitter_multiplier
+            
+        return delay
 
 # Metrics tracking 
 class EventMetrics:
@@ -121,58 +174,6 @@ class EventMetrics:
         self.retry_attempts = {}
         self.retry_success = {}
         self.retry_failure = {}
-
-# Retry handling
-class RetryPolicy:
-    """
-    Defines the retry behavior for event handlers.
-    
-    This class contains the configuration for how events should be
-    retried in case of handler failures.
-    """
-    
-    def __init__(
-        self,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        retry_delay: float = DEFAULT_RETRY_DELAY,
-        backoff_factor: float = DEFAULT_RETRY_BACKOFF,
-        jitter: bool = True
-    ):
-        """
-        Initialize the retry policy.
-        
-        Args:
-            max_retries: Maximum number of retry attempts
-            retry_delay: Initial delay between retries in seconds
-            backoff_factor: Multiplier for exponential backoff
-            jitter: Whether to add random jitter to retry delays
-        """
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.backoff_factor = backoff_factor
-        self.jitter = jitter
-    
-    def get_next_retry_delay(self, attempt: int) -> float:
-        """
-        Calculate the delay for the next retry attempt.
-        
-        Args:
-            attempt: The retry attempt number (1-based)
-            
-        Returns:
-            Delay in seconds before the next retry
-        """
-        if attempt <= 0:
-            return 0
-            
-        delay = self.retry_delay * (self.backoff_factor ** (attempt - 1))
-        
-        if self.jitter:
-            # Add random jitter (±20%)
-            jitter_multiplier = 1 + random.uniform(-0.2, 0.2)
-            delay *= jitter_multiplier
-            
-        return delay
 
 # Error handling decorators
 def event_handler_error_wrapper(func: Callable, retry_policy: RetryPolicy = None) -> Callable:
@@ -657,5 +658,12 @@ class EventDispatcher:
                 
         return processed_count
 
-# Create a singleton instance of the event dispatcher
-event_dispatcher = EventDispatcher() 
+# Create a singleton instance of the event dispatcher with default retry policy from settings
+event_dispatcher = EventDispatcher(
+    default_retry_policy=RetryPolicy(
+        max_retries=DEFAULT_MAX_RETRIES,
+        retry_delay=DEFAULT_RETRY_DELAY,
+        backoff_factor=DEFAULT_RETRY_BACKOFF,
+        jitter=True
+    )
+) 

@@ -13,119 +13,7 @@ from app.events.definitions.client_events import (
     create_client_added_to_reminder_event,
     create_client_removed_from_reminder_event
 )
-from app.events.utils import emit_event_safely, with_event_emission
-
-# Event factory functions for decorators
-def make_client_added_event(service, db, obj_in, user_id, result):
-    """
-    Create a client added to reminder event.
-    
-    Args:
-        service: The service instance
-        db: Database session
-        obj_in: Reminder recipient creation schema
-        user_id: User ID for authorization
-        result: Created reminder recipient (function result)
-        
-    Returns:
-        Event for client added to reminder
-    """
-    # Get client and reminder for the event
-    client = client_repository.get(db, id=result.client_id)
-    reminder = reminder_repository.get(db, id=result.reminder_id)
-    
-    return create_client_added_to_reminder_event(
-        client_id=client.id,
-        reminder_id=reminder.id,
-        user_id=reminder.user_id,
-        client_name=client.name,
-        reminder_title=reminder.title
-    )
-
-def make_client_removed_event(service, db, reminder_recipient_id, user_id, result):
-    """
-    Create a client removed from reminder event.
-    
-    Args:
-        service: The service instance
-        db: Database session
-        reminder_recipient_id: ID of the recipient to delete
-        user_id: User ID for authorization (optional)
-        result: Deleted reminder recipient (function result)
-        
-    Returns:
-        Event for client removed from reminder
-    """
-    # Client and reminder IDs are stored in the result
-    client_id = result.client_id
-    reminder_id = result.reminder_id
-    
-    # Get client and reminder for the event
-    client = client_repository.get(db, id=client_id)
-    reminder = reminder_repository.get(db, id=reminder_id)
-    
-    if client and reminder:
-        return create_client_removed_from_reminder_event(
-            client_id=client_id,
-            reminder_id=reminder_id,
-            user_id=reminder.user_id,
-            client_name=client.name,
-            reminder_title=reminder.title
-        )
-    return None
-
-# Helper functions for bulk operations
-def emit_client_added_events(db: Session, clients: List, reminder_id: int, user_id: int) -> None:
-    """
-    Emit events for multiple clients added to a reminder.
-    
-    Args:
-        db: Database session
-        clients: List of client objects or IDs
-        reminder_id: Reminder ID
-        user_id: User ID
-    """
-    reminder = reminder_repository.get(db, id=reminder_id)
-    if not reminder:
-        return
-        
-    for client in clients:
-        client_id = client.id if hasattr(client, 'id') else client
-        client_obj = client if hasattr(client, 'name') else client_repository.get(db, id=client_id)
-        
-        if client_obj:
-            event = create_client_added_to_reminder_event(
-                client_id=client_id,
-                reminder_id=reminder_id,
-                user_id=user_id,
-                client_name=client_obj.name,
-                reminder_title=reminder.title
-            )
-            emit_event_safely(event)
-
-def emit_client_removed_events(db: Session, client_data: Dict, reminder_id: int, user_id: int) -> None:
-    """
-    Emit events for multiple clients removed from a reminder.
-    
-    Args:
-        db: Database session
-        client_data: Dictionary of client IDs to client objects
-        reminder_id: Reminder ID
-        user_id: User ID
-    """
-    reminder = reminder_repository.get(db, id=reminder_id)
-    if not reminder:
-        return
-        
-    for client_id, client in client_data.items():
-        event = create_client_removed_from_reminder_event(
-            client_id=client_id,
-            reminder_id=reminder_id,
-            user_id=user_id,
-            client_name=client.name,
-            reminder_title=reminder.title
-        )
-        emit_event_safely(event)
+from app.events.utils import queue_event
 
 class ReminderRecipientService:
     """
@@ -239,13 +127,13 @@ class ReminderRecipientService:
     
     @with_transaction
     @handle_exceptions(error_message="Failed to create reminder recipient")
-    @with_event_emission(make_client_added_event)
     def create_reminder_recipient(
         self, 
         db: Session, 
         *, 
         obj_in: ReminderRecipientCreate, 
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> ReminderRecipient:
         """
         Create a new reminder recipient.
@@ -290,17 +178,28 @@ class ReminderRecipientService:
         # Create the reminder recipient
         created_recipient = self.repository.create(db, obj_in=obj_in)
         
+        # Queue event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_client_added_to_reminder_event(
+                client_id=client.id,
+                reminder_id=reminder.id,
+                user_id=reminder.user_id,
+                client_name=client.name,
+                reminder_title=reminder.title
+            )
+            queue_event(kwargs['_transaction_id'], event)
+        
         return created_recipient
     
     @with_transaction
     @handle_exceptions(error_message="Failed to delete reminder recipient")
-    @with_event_emission(make_client_removed_event)
     def delete_reminder_recipient(
         self, 
         db: Session, 
         *, 
         reminder_recipient_id: int,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> ReminderRecipient:
         """
         Delete a reminder recipient.
@@ -318,14 +217,30 @@ class ReminderRecipientService:
         """
         reminder_recipient = self.get_reminder_recipient(db, reminder_recipient_id=reminder_recipient_id)
         
+        # Get client and reminder for event creation before deletion
+        client_id = reminder_recipient.client_id
+        reminder_id = reminder_recipient.reminder_id
+        client = client_repository.get(db, id=client_id)
+        reminder = reminder_repository.get(db, id=reminder_id)
+        
         # If user_id is provided, verify ownership
         if user_id:
-            reminder = reminder_repository.get(db, id=reminder_recipient.reminder_id)
             if not reminder or reminder.user_id != user_id:
                 raise InvalidOperationError(f"Reminder recipient with ID {reminder_recipient_id} not found")
         
         # Delete the reminder recipient
         deleted_recipient = self.repository.delete(db, id=reminder_recipient_id)
+        
+        # Queue event for emission after transaction commits
+        if '_transaction_id' in kwargs and client and reminder:
+            event = create_client_removed_from_reminder_event(
+                client_id=client_id,
+                reminder_id=reminder_id,
+                user_id=reminder.user_id,
+                client_name=client.name,
+                reminder_title=reminder.title
+            )
+            queue_event(kwargs['_transaction_id'], event)
         
         return deleted_recipient
     
@@ -337,7 +252,8 @@ class ReminderRecipientService:
         *, 
         reminder_id: int,
         client_ids: List[int],
-        user_id: int
+        user_id: int,
+        **kwargs
     ) -> List[ReminderRecipient]:
         """
         Add multiple clients to a reminder.
@@ -371,7 +287,6 @@ class ReminderRecipientService:
         
         # Create new associations
         created_recipients = []
-        created_clients = []
         
         for client_id in new_client_ids:
             # Verify client exists and belongs to user
@@ -386,11 +301,17 @@ class ReminderRecipientService:
             )
             created_recipient = self.repository.create(db, obj_in=recipient_data)
             created_recipients.append(created_recipient)
-            created_clients.append(client)
-        
-        # Emit events for all added clients
-        if created_clients:
-            emit_client_added_events(db, created_clients, reminder_id, user_id)
+            
+            # Queue event for emission after transaction commits
+            if '_transaction_id' in kwargs:
+                event = create_client_added_to_reminder_event(
+                    client_id=client_id,
+                    reminder_id=reminder_id,
+                    user_id=user_id,
+                    client_name=client.name,
+                    reminder_title=reminder.title
+                )
+                queue_event(kwargs['_transaction_id'], event)
             
         return created_recipients
     
@@ -402,7 +323,8 @@ class ReminderRecipientService:
         *, 
         reminder_id: int,
         client_ids: List[int],
-        user_id: int
+        user_id: int,
+        **kwargs
     ) -> int:
         """
         Remove multiple clients from a reminder.
@@ -424,22 +346,144 @@ class ReminderRecipientService:
         if not reminder or reminder.user_id != user_id:
             raise ReminderNotFoundError(f"Reminder with ID {reminder_id} not found")
         
-        # Fetch all client details before removal for events
-        clients = {}
+        # Get reminder recipients to be removed
+        recipients_to_remove = []
         for client_id in client_ids:
-            client = client_repository.get(db, id=client_id)
+            recipient = self.repository.get_by_reminder_and_client(
+                db, reminder_id=reminder_id, client_id=client_id)
+            if recipient:
+                recipients_to_remove.append(recipient)
+        
+        # Collect client information before removing
+        clients_info = {}
+        for recipient in recipients_to_remove:
+            client = client_repository.get(db, id=recipient.client_id)
             if client and client.user_id == user_id:
-                clients[client_id] = client
+                clients_info[client.id] = client
         
         # Remove associations
         removed_count = self.repository.delete_by_reminder_and_clients(
             db, reminder_id=reminder_id, client_ids=client_ids)
         
-        # Emit client removed from reminder events
-        if clients:
-            emit_client_removed_events(db, clients, reminder_id, user_id)
+        # Queue events for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            for client_id, client in clients_info.items():
+                event = create_client_removed_from_reminder_event(
+                    client_id=client_id,
+                    reminder_id=reminder_id,
+                    user_id=user_id,
+                    client_name=client.name,
+                    reminder_title=reminder.title
+                )
+                queue_event(kwargs['_transaction_id'], event)
         
         return removed_count
+    
+    @with_transaction
+    @handle_exceptions(error_message="Failed to update reminder recipients")
+    def update_reminder_recipients(
+        self, 
+        db: Session, 
+        *, 
+        reminder_id: int, 
+        client_ids: List[int],
+        user_id: Optional[int] = None,
+        **kwargs
+    ) -> Dict[str, List[ReminderRecipient]]:
+        """
+        Update the clients for a reminder by replacing all existing clients with the provided list.
+        
+        Args:
+            db: Database session
+            reminder_id: ID of the reminder to update
+            client_ids: List of client IDs to assign to the reminder
+            user_id: Optional user ID for authorization
+            
+        Returns:
+            Dict with added and removed reminder recipients
+            
+        Raises:
+            ReminderNotFoundError: If reminder not found
+            ClientNotFoundError: If any client not found
+        """
+        # Verify reminder exists and user has access
+        reminder = reminder_repository.get(db, id=reminder_id)
+        if not reminder:
+            raise ReminderNotFoundError(f"Reminder with ID {reminder_id} not found")
+            
+        if user_id and reminder.user_id != user_id:
+            raise ReminderNotFoundError(f"Reminder with ID {reminder_id} not found")
+            
+        # Get current reminder recipients
+        current_recipients = self.repository.get_by_reminder_id(db, reminder_id=reminder_id)
+        current_client_ids = {recipient.client_id for recipient in current_recipients}
+        
+        # Determine which clients to add and which to remove
+        client_ids_to_add = [cid for cid in client_ids if cid not in current_client_ids]
+        client_ids_to_remove = [cid for cid in current_client_ids if cid not in client_ids]
+        
+        # Verify all clients to add exist and user has access
+        clients_to_add = {}
+        for client_id in client_ids_to_add:
+            client = client_repository.get(db, id=client_id)
+            if not client:
+                raise ClientNotFoundError(f"Client with ID {client_id} not found")
+                
+            if user_id and client.user_id != user_id:
+                raise ClientNotFoundError(f"Client with ID {client_id} not found")
+                
+            clients_to_add[client_id] = client
+        
+        # Get clients to remove for event data
+        clients_to_remove = {}
+        for client_id in client_ids_to_remove:
+            client = client_repository.get(db, id=client_id)
+            if client:
+                clients_to_remove[client_id] = client
+        
+        # Add new reminder recipients
+        added_recipients = []
+        for client_id in client_ids_to_add:
+            obj_in = ReminderRecipientCreate(reminder_id=reminder_id, client_id=client_id)
+            recipient = self.repository.create(db, obj_in=obj_in)
+            added_recipients.append(recipient)
+            
+            # Queue an event for each added client
+            if '_transaction_id' in kwargs:
+                client = clients_to_add[client_id]
+                event = create_client_added_to_reminder_event(
+                    client_id=client_id,
+                    reminder_id=reminder_id,
+                    user_id=reminder.user_id,
+                    client_name=client.name,
+                    reminder_title=reminder.title
+                )
+                queue_event(kwargs['_transaction_id'], event)
+        
+        # Remove reminder recipients that are no longer needed
+        removed_recipients = []
+        for recipient in current_recipients:
+            if recipient.client_id in client_ids_to_remove:
+                client_id = recipient.client_id
+                removed = self.repository.delete(db, id=recipient.id)
+                removed_recipients.append(removed)
+                
+                # Queue an event for each removed client
+                if client_id in clients_to_remove and '_transaction_id' in kwargs:
+                    client = clients_to_remove[client_id]
+                    event = create_client_removed_from_reminder_event(
+                        client_id=client_id,
+                        reminder_id=reminder_id,
+                        user_id=reminder.user_id,
+                        client_name=client.name,
+                        reminder_title=reminder.title
+                    )
+                    queue_event(kwargs['_transaction_id'], event)
+        
+        return {
+            "added": added_recipients,
+            "removed": removed_recipients
+        }
 
 # Create singleton instance
 reminder_recipient_service = ReminderRecipientService() 

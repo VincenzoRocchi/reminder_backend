@@ -10,6 +10,7 @@ from app.api.endpoints import (
     senderIdentities,
     monitoring
 )
+from app.events.monitoring import monitoring_router as events_monitoring_router
 
 # Main API router
 api_router = APIRouter()
@@ -24,3 +25,6 @@ api_router.include_router(notifications.router, prefix="/notifications", tags=["
 api_router.include_router(senderIdentities.router, prefix="/sender-identities", tags=["sender-identities"])
 api_router.include_router(emailConfigurations.router, prefix="/email-configurations", tags=["email-configurations"])
 api_router.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
+
+# Include event monitoring router (requires admin access)
+api_router.include_router(events_monitoring_router)

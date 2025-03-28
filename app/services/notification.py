@@ -23,6 +23,7 @@ from app.core.exceptions import (
 )
 from app.core.error_handling import handle_exceptions, with_transaction
 from app.events.dispatcher import event_dispatcher
+from app.events.utils import queue_event
 from app.events.definitions.notification_events import (
     create_notification_scheduled_event,
     create_notification_sent_event,
@@ -233,7 +234,8 @@ class NotificationService:
         self, 
         db: Session, 
         *, 
-        obj_in: NotificationCreate
+        obj_in: NotificationCreate,
+        **kwargs
     ) -> Notification:
         """
         Create a new notification.
@@ -262,16 +264,17 @@ class NotificationService:
         # Create notification
         notification = self.repository.create(db, obj_in=obj_in)
         
-        # Emit notification scheduled event
-        event = create_notification_scheduled_event(
-            notification_id=notification.id,
-            user_id=reminder.user_id,
-            reminder_id=notification.reminder_id,
-            client_id=notification.client_id,
-            notification_type=notification.notification_type,
-            message=notification.message
-        )
-        event_dispatcher.emit(event)
+        # Queue notification scheduled event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_notification_scheduled_event(
+                notification_id=notification.id,
+                user_id=reminder.user_id,
+                reminder_id=notification.reminder_id,
+                client_id=notification.client_id,
+                notification_type=notification.notification_type,
+                message=notification.message
+            )
+            queue_event(kwargs['_transaction_id'], event)
         
         return notification
     
@@ -283,7 +286,8 @@ class NotificationService:
         *, 
         notification_id: int,
         obj_in: NotificationUpdate,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> Notification:
         """
         Update a notification.
@@ -310,7 +314,8 @@ class NotificationService:
         db: Session, 
         *, 
         notification_id: int,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> Notification:
         """
         Delete a notification.
@@ -338,15 +343,16 @@ class NotificationService:
         # Delete the notification
         deleted_notification = self.repository.delete(db, id=notification_id)
         
-        # Emit a notification cancelled event when a notification is deleted
-        event = create_notification_cancelled_event(
-            notification_id=notification_id,
-            user_id=user_id,
-            reminder_id=reminder_id,
-            client_id=client_id,
-            notification_type=notification_type
-        )
-        event_dispatcher.emit(event)
+        # Queue notification cancelled event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_notification_cancelled_event(
+                notification_id=notification_id,
+                user_id=user_id,
+                reminder_id=reminder_id,
+                client_id=client_id,
+                notification_type=notification_type
+            )
+            queue_event(kwargs['_transaction_id'], event)
         
         return deleted_notification
     
@@ -357,7 +363,8 @@ class NotificationService:
         db: Session, 
         *, 
         notification_id: int,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> Notification:
         """
         Mark a notification as sent.
@@ -379,16 +386,17 @@ class NotificationService:
         # Update the notification
         updated_notification = self.repository.mark_as_sent(db, notification_id=notification_id)
         
-        # Emit notification sent event
-        event = create_notification_sent_event(
-            notification_id=updated_notification.id,
-            user_id=updated_notification.reminder.user_id,
-            reminder_id=updated_notification.reminder_id,
-            client_id=updated_notification.client_id,
-            notification_type=updated_notification.notification_type,
-            sent_at=updated_notification.sent_at or datetime.utcnow()
-        )
-        event_dispatcher.emit(event)
+        # Queue notification sent event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_notification_sent_event(
+                notification_id=updated_notification.id,
+                user_id=updated_notification.reminder.user_id,
+                reminder_id=updated_notification.reminder_id,
+                client_id=updated_notification.client_id,
+                notification_type=updated_notification.notification_type,
+                sent_at=updated_notification.sent_at or datetime.utcnow()
+            )
+            queue_event(kwargs['_transaction_id'], event)
         
         return updated_notification
     
@@ -400,7 +408,8 @@ class NotificationService:
         *, 
         notification_id: int,
         error_message: str,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> Notification:
         """
         Mark a notification as failed.
@@ -422,16 +431,17 @@ class NotificationService:
         # Update the notification
         updated_notification = self.repository.mark_as_failed(db, notification_id=notification_id, error_message=error_message)
         
-        # Emit notification failed event
-        event = create_notification_failed_event(
-            notification_id=updated_notification.id,
-            user_id=updated_notification.reminder.user_id,
-            reminder_id=updated_notification.reminder_id,
-            client_id=updated_notification.client_id,
-            notification_type=updated_notification.notification_type,
-            error_message=error_message
-        )
-        event_dispatcher.emit(event)
+        # Queue notification failed event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_notification_failed_event(
+                notification_id=updated_notification.id,
+                user_id=updated_notification.reminder.user_id,
+                reminder_id=updated_notification.reminder_id,
+                client_id=updated_notification.client_id,
+                notification_type=updated_notification.notification_type,
+                error_message=error_message
+            )
+            queue_event(kwargs['_transaction_id'], event)
         
         return updated_notification
     
@@ -442,7 +452,8 @@ class NotificationService:
         db: Session, 
         *, 
         notification_id: int,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        **kwargs
     ) -> Notification:
         """
         Mark a notification as cancelled.
@@ -464,15 +475,16 @@ class NotificationService:
         # Update the notification
         updated_notification = self.repository.mark_as_cancelled(db, notification_id=notification_id)
         
-        # Emit notification cancelled event
-        event = create_notification_cancelled_event(
-            notification_id=updated_notification.id,
-            user_id=updated_notification.reminder.user_id,
-            reminder_id=updated_notification.reminder_id,
-            client_id=updated_notification.client_id,
-            notification_type=updated_notification.notification_type
-        )
-        event_dispatcher.emit(event)
+        # Queue notification cancelled event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_notification_cancelled_event(
+                notification_id=updated_notification.id,
+                user_id=updated_notification.reminder.user_id,
+                reminder_id=updated_notification.reminder_id,
+                client_id=updated_notification.client_id,
+                notification_type=updated_notification.notification_type
+            )
+            queue_event(kwargs['_transaction_id'], event)
         
         return updated_notification
     
@@ -482,7 +494,8 @@ class NotificationService:
         self, 
         db: Session, 
         *, 
-        reminder
+        reminder,
+        **kwargs
     ) -> List[Notification]:
         """
         Create and send notifications for a reminder to all associated clients.
@@ -519,6 +532,18 @@ class NotificationService:
             notification = self.repository.create(db, obj_in=notification_data)
             created_notifications.append(notification)
             
+            # Queue notification scheduled event for emission after transaction commits
+            if '_transaction_id' in kwargs:
+                event = create_notification_scheduled_event(
+                    notification_id=notification.id,
+                    user_id=reminder.user_id,
+                    reminder_id=notification.reminder_id,
+                    client_id=notification.client_id,
+                    notification_type=notification.notification_type,
+                    message=notification.message
+                )
+                queue_event(kwargs['_transaction_id'], event)
+            
             try:
                 # Attempt to send the notification
                 sent = scheduler_service.send_notification(
@@ -532,21 +557,56 @@ class NotificationService:
                 
                 # Update notification status based on result
                 if sent:
-                    self.repository.mark_as_sent(db, notification_id=notification.id)
+                    updated_notification = self.repository.mark_as_sent(db, notification_id=notification.id)
+                    # Queue notification sent event for emission after transaction commits
+                    if '_transaction_id' in kwargs:
+                        event = create_notification_sent_event(
+                            notification_id=updated_notification.id,
+                            user_id=reminder.user_id,
+                            reminder_id=updated_notification.reminder_id,
+                            client_id=updated_notification.client_id,
+                            notification_type=updated_notification.notification_type,
+                            sent_at=updated_notification.sent_at or datetime.utcnow()
+                        )
+                        queue_event(kwargs['_transaction_id'], event)
                 else:
-                    self.repository.mark_as_failed(
+                    error_msg = "Failed to send notification"
+                    updated_notification = self.repository.mark_as_failed(
                         db, 
                         notification_id=notification.id, 
-                        error_message="Failed to send notification"
+                        error_message=error_msg
                     )
+                    # Queue notification failed event for emission after transaction commits
+                    if '_transaction_id' in kwargs:
+                        event = create_notification_failed_event(
+                            notification_id=updated_notification.id,
+                            user_id=reminder.user_id,
+                            reminder_id=updated_notification.reminder_id,
+                            client_id=updated_notification.client_id,
+                            notification_type=updated_notification.notification_type,
+                            error_message=error_msg
+                        )
+                        queue_event(kwargs['_transaction_id'], event)
                     
             except Exception as e:
                 # Log and record the error
-                self.repository.mark_as_failed(
+                error_msg = str(e)
+                updated_notification = self.repository.mark_as_failed(
                     db, 
                     notification_id=notification.id, 
-                    error_message=str(e)
+                    error_message=error_msg
                 )
+                # Queue notification failed event for emission after transaction commits
+                if '_transaction_id' in kwargs:
+                    event = create_notification_failed_event(
+                        notification_id=updated_notification.id,
+                        user_id=reminder.user_id,
+                        reminder_id=updated_notification.reminder_id,
+                        client_id=updated_notification.client_id,
+                        notification_type=updated_notification.notification_type,
+                        error_message=error_msg
+                    )
+                    queue_event(kwargs['_transaction_id'], event)
                 
         return created_notifications
 

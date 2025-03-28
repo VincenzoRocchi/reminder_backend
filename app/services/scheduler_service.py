@@ -132,8 +132,8 @@ class SchedulerService:
                         
                     logger.info(f"Generated {len(notifications)} notifications for reminder {reminder.id}")
                     
-                    # Process the reminder notifications
-                    await notification_service.create_and_send_notifications_for_reminder(
+                    # Process the reminder notifications with transaction awareness
+                    notification_service.create_and_send_notifications_for_reminder(
                         db, 
                         reminder=reminder
                     )

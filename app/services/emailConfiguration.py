@@ -6,6 +6,13 @@ from app.repositories.user import user_repository
 from app.schemas.emailConfigurations import EmailConfigurationCreate, EmailConfigurationUpdate, EmailConfiguration
 from app.core.exceptions import UserNotFoundError, EmailConfigurationNotFoundError, EmailConfigurationAlreadyExistsError
 from app.core.error_handling import handle_exceptions, with_transaction
+from app.events.utils import queue_event
+from app.events.definitions.email_configuration_events import (
+    create_email_configuration_created_event,
+    create_email_configuration_updated_event,
+    create_email_configuration_deleted_event,
+    create_email_configuration_set_default_event
+)
 
 class EmailConfigurationService:
     """
@@ -117,7 +124,8 @@ class EmailConfigurationService:
         db: Session, 
         *, 
         obj_in: EmailConfigurationCreate, 
-        user_id: int
+        user_id: int,
+        **kwargs
     ) -> EmailConfiguration:
         """
         Create a new email configuration.
@@ -150,7 +158,22 @@ class EmailConfigurationService:
         obj_in_data = obj_in.model_dump()
         obj_in_data["user_id"] = user_id
         
-        return email_configuration_repository.create(db, obj_in=obj_in_data)
+        created_config = email_configuration_repository.create(db, obj_in=obj_in_data)
+        
+        # Queue event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_email_configuration_created_event(
+                email_configuration_id=created_config.id,
+                user_id=user_id,
+                configuration_name=created_config.configuration_name,
+                smtp_server=created_config.smtp_server,
+                smtp_port=created_config.smtp_port,
+                sender_email=created_config.sender_email,
+                is_default=created_config.is_default
+            )
+            queue_event(kwargs['_transaction_id'], event)
+        
+        return created_config
     
     @with_transaction
     @handle_exceptions(error_message="Failed to update email configuration")
@@ -160,7 +183,8 @@ class EmailConfigurationService:
         *, 
         email_configuration_id: int,
         obj_in: EmailConfigurationUpdate,
-        user_id: int
+        user_id: int,
+        **kwargs
     ) -> EmailConfiguration:
         """
         Update an email configuration.
@@ -189,7 +213,28 @@ class EmailConfigurationService:
                 raise EmailConfigurationAlreadyExistsError(
                     f"Email configuration with name '{obj_in.configuration_name}' already exists")
         
-        return email_configuration_repository.update(db, db_obj=email_configuration, obj_in=obj_in)
+        updated_config = email_configuration_repository.update(db, db_obj=email_configuration, obj_in=obj_in)
+        
+        # Queue event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            # Extract updated values from obj_in
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
+                
+            event = create_email_configuration_updated_event(
+                email_configuration_id=updated_config.id,
+                user_id=user_id,
+                configuration_name=updated_config.configuration_name,
+                smtp_server=updated_config.smtp_server if 'smtp_server' in update_data else None,
+                smtp_port=updated_config.smtp_port if 'smtp_port' in update_data else None,
+                sender_email=updated_config.sender_email if 'sender_email' in update_data else None,
+                is_default=updated_config.is_default if 'is_default' in update_data else None
+            )
+            queue_event(kwargs['_transaction_id'], event)
+        
+        return updated_config
     
     @with_transaction
     @handle_exceptions(error_message="Failed to delete email configuration")
@@ -198,7 +243,8 @@ class EmailConfigurationService:
         db: Session, 
         *, 
         email_configuration_id: int,
-        user_id: int
+        user_id: int,
+        **kwargs
     ) -> EmailConfiguration:
         """
         Delete an email configuration.
@@ -216,7 +262,23 @@ class EmailConfigurationService:
         """
         email_configuration = self.get_email_configuration_by_user(
             db, user_id=user_id, email_configuration_id=email_configuration_id)
-        return email_configuration_repository.delete(db, id=email_configuration_id)
+        
+        # Store configuration information before deletion for event emission
+        config_id = email_configuration.id
+        config_name = email_configuration.configuration_name
+        
+        deleted_config = email_configuration_repository.delete(db, id=email_configuration_id)
+        
+        # Queue event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_email_configuration_deleted_event(
+                email_configuration_id=config_id,
+                user_id=user_id,
+                configuration_name=config_name
+            )
+            queue_event(kwargs['_transaction_id'], event)
+        
+        return deleted_config
     
     @handle_exceptions(error_message="Failed to get default email configuration")
     def get_default_email_configuration(
@@ -244,7 +306,8 @@ class EmailConfigurationService:
         db: Session, 
         *, 
         email_configuration_id: int,
-        user_id: int
+        user_id: int,
+        **kwargs
     ) -> EmailConfiguration:
         """
         Set an email configuration as default.
@@ -260,17 +323,23 @@ class EmailConfigurationService:
         Raises:
             EmailConfigurationNotFoundError: If email configuration not found
         """
-        # Clear current default
-        current_default = self.get_default_email_configuration(db, user_id=user_id)
-        if current_default:
-            email_configuration_repository.update(
-                db, db_obj=current_default, obj_in={"is_default": False})
-        
-        # Set new default
+        # Verify configuration exists and belongs to user
         email_configuration = self.get_email_configuration_by_user(
             db, user_id=user_id, email_configuration_id=email_configuration_id)
-        return email_configuration_repository.update(
-            db, db_obj=email_configuration, obj_in={"is_default": True})
+        
+        # Set as default
+        updated_config = email_configuration_repository.set_default(db, email_configuration_id=email_configuration_id, user_id=user_id)
+        
+        # Queue event for emission after transaction commits
+        if '_transaction_id' in kwargs:
+            event = create_email_configuration_set_default_event(
+                email_configuration_id=updated_config.id,
+                user_id=user_id,
+                configuration_name=updated_config.configuration_name
+            )
+            queue_event(kwargs['_transaction_id'], event)
+        
+        return updated_config
 
-# Create singleton instance
+# Singleton instance
 email_configuration_service = EmailConfigurationService() 

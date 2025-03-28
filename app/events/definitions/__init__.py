@@ -10,6 +10,7 @@ from .notification_events import *
 from .client_events import *
 from .sender_identity_events import *
 from .user_events import *
+from .email_configuration_events import *
 
 # Map of event types to their respective classes for dynamic loading
 EVENT_TYPES = {
@@ -45,7 +46,14 @@ EVENT_TYPES = {
     "user.updated": UserUpdatedEvent,
     "user.deleted": UserDeletedEvent,
     "user.logged_in": UserLoggedInEvent,
-    "user.logged_out": UserLoggedOutEvent
+    "user.logged_out": UserLoggedOutEvent,
+    "user.password_reset": UserPasswordResetEvent,
+    
+    # Email configuration events
+    "email_configuration.created": EmailConfigurationCreatedEvent,
+    "email_configuration.updated": EmailConfigurationUpdatedEvent,
+    "email_configuration.deleted": EmailConfigurationDeletedEvent,
+    "email_configuration.set_default": EmailConfigurationSetDefaultEvent
 }
 
 __all__ = [
@@ -82,6 +90,13 @@ __all__ = [
     "UserDeletedEvent",
     "UserLoggedInEvent",
     "UserLoggedOutEvent",
+    "UserPasswordResetEvent",
+    
+    # Email configuration events
+    "EmailConfigurationCreatedEvent",
+    "EmailConfigurationUpdatedEvent",
+    "EmailConfigurationDeletedEvent",
+    "EmailConfigurationSetDefaultEvent",
 
     # Event type mapping
     "EVENT_TYPES"

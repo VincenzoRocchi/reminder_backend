@@ -61,6 +61,51 @@ class BaseAppSettings(BaseSettings):
                      "it will be built using DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME.")
     )
     
+    # ------------------------------
+    # EVENT SYSTEM SETTINGS
+    # ------------------------------
+    EVENT_STORE_URL: Optional[str] = Field(
+        default=os.getenv("EVENT_STORE_URL"),
+        description="Event store database URL. If not set, uses the main database."
+    )
+    
+    EVENT_PERSISTENCE_ENABLED: bool = Field(
+        default=os.getenv("EVENT_PERSISTENCE_ENABLED", "True").lower() == "true",
+        description="Enable event persistence to database"
+    )
+    
+    EVENT_RECOVERY_ENABLED: bool = Field(
+        default=os.getenv("EVENT_RECOVERY_ENABLED", "True").lower() == "true",
+        description="Enable recovery of unprocessed events at startup"
+    )
+    
+    EVENT_RECOVERY_LIMIT: int = Field(
+        default=int(os.getenv("EVENT_RECOVERY_LIMIT", "100")),
+        description="Maximum number of unprocessed events to recover at startup"
+    )
+    
+    EVENT_MAX_RETRIES: int = Field(
+        default=int(os.getenv("EVENT_MAX_RETRIES", "3")),
+        description="Maximum number of retries for failed event handlers"
+    )
+    
+    EVENT_RETRY_DELAY: float = Field(
+        default=float(os.getenv("EVENT_RETRY_DELAY", "1.0")),
+        description="Initial delay between retry attempts in seconds"
+    )
+    
+    EVENT_RETRY_BACKOFF: float = Field(
+        default=float(os.getenv("EVENT_RETRY_BACKOFF", "2.0")),
+        description="Exponential backoff multiplier for increasing retry delays"
+    )
+    
+    @model_validator(mode='after')
+    def set_event_store_url(self) -> 'BaseAppSettings':
+        """Set the event store URL to the main database URL if not explicitly configured."""
+        if not self.EVENT_STORE_URL and self.SQLALCHEMY_DATABASE_URI:
+            self.EVENT_STORE_URL = self.SQLALCHEMY_DATABASE_URI
+        return self
+    
     @model_validator(mode='after')
     def build_sqlalchemy_uri(self) -> 'BaseAppSettings':
         # If URI is already specified in the environment, use that
