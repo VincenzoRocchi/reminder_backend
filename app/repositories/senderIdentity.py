@@ -18,7 +18,8 @@ class SenderIdentityRepository(BaseRepository[SenderIdentity, SenderIdentityCrea
         *, 
         user_id: int,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        identity_type: Optional[IdentityTypeEnum] = None
     ) -> List[SenderIdentity]:
         """
         Get all sender identities for a user.
@@ -28,13 +29,19 @@ class SenderIdentityRepository(BaseRepository[SenderIdentity, SenderIdentityCrea
             user_id: User ID
             skip: Number of records to skip
             limit: Maximum number of records to return
+            identity_type: Filter by identity type
             
         Returns:
             List[SenderIdentity]: List of sender identities
         """
-        return db.query(self.model).filter(
+        query = db.query(self.model).filter(
             self.model.user_id == user_id
-        ).offset(skip).limit(limit).all()
+        )
+        
+        if identity_type:
+            query = query.filter(self.model.identity_type == identity_type)
+            
+        return query.offset(skip).limit(limit).all()
     
     def get_by_filter(
         self, 

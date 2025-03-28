@@ -10,7 +10,7 @@ from app.api.routes import api_router
 from app.database import engine, Base
 from app.core.logging_setup import setup_logging
 from app.core.exception_handlers import register_exception_handlers
-from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware, JSONSanitizerMiddleware
 from app.events.monitoring import monitoring_router
 
 # Set up logging first
@@ -50,6 +50,9 @@ app.add_middleware(RequestLoggingMiddleware)
 
 # Add security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Add JSON sanitizer middleware (add this before CORS middleware)
+app.add_middleware(JSONSanitizerMiddleware)
 
 # Set up CORS middleware with values from settings
 app.add_middleware(

@@ -78,7 +78,8 @@ class SenderIdentityService:
         *, 
         user_id: int,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        identity_type: Optional[IdentityTypeEnum] = None
     ) -> List[SenderIdentity]:
         """
         Get all sender identities for a user.
@@ -88,12 +89,13 @@ class SenderIdentityService:
             user_id: User ID
             skip: Number of records to skip
             limit: Maximum number of records to return
+            identity_type: Filter by identity type
             
         Returns:
             List[SenderIdentity]: List of sender identities
         """
         return sender_identity_repository.get_by_user_id(
-            db, user_id=user_id, skip=skip, limit=limit
+            db, user_id=user_id, skip=skip, limit=limit, identity_type=identity_type
         )
     
     def get_default_sender_identity(
@@ -424,7 +426,7 @@ class SenderIdentityService:
         identity_name = sender_identity.display_name or ""
         
         # Delete the identity
-        sender_identity = sender_identity_repository.remove(db, id=sender_identity_id)
+        sender_identity = sender_identity_repository.delete(db, id=sender_identity_id)
         
         # Queue event for emission after transaction commits
         if '_transaction_id' in kwargs:
@@ -541,5 +543,42 @@ class SenderIdentityService:
             queue_event(kwargs['_transaction_id'], event)
         
         return sender_identity
+
+    @handle_exceptions(error_message="Failed to verify sender identity")
+    def verify_sender_identity(
+        self, 
+        db: Session, 
+        *, 
+        sender_identity_id: int, 
+        user_id: int,
+        **kwargs
+    ) -> SenderIdentity:
+        """
+        Verify a sender identity.
+        
+        In a real implementation, this would verify that the user actually 
+        owns the phone number or email. This method serves as a wrapper 
+        around set_verification_status for semantic clarity.
+        
+        Args:
+            db: Database session
+            sender_identity_id: Sender identity ID
+            user_id: User ID for authorization
+            
+        Returns:
+            SenderIdentity: Updated sender identity
+            
+        Raises:
+            SenderIdentityNotFoundError: If sender identity not found
+        """
+        # In a real application, verification logic would go here
+        # For now, we just set the verification status to true
+        return self.set_verification_status(
+            db,
+            sender_identity_id=sender_identity_id,
+            is_verified=True,
+            user_id=user_id,
+            **kwargs
+        )
 
 sender_identity_service = SenderIdentityService() 

@@ -1,9 +1,13 @@
 import time
 import logging
 import uuid
+import json
+import re
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+from typing import Dict, Any, Optional
+import asyncio
 
 from app.core.settings import settings
 from app.core import request_context
@@ -126,3 +130,57 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Content-Security-Policy"] = "default-src 'self'"
         
         return response 
+
+class JSONSanitizerMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to sanitize JSON inputs by ensuring property names are properly quoted.
+    This fixes client-side JSON formatting errors before they reach FastAPI's validators.
+    """
+    async def dispatch(self, request: Request, call_next):
+        # Only process POST/PUT/PATCH requests with JSON content
+        if request.method in ["POST", "PUT", "PATCH"] and \
+           request.headers.get("content-type", "").startswith("application/json"):
+            # Need to read the body first
+            body = await request.body()
+            if body:
+                try:
+                    # Try to decode the body as a string
+                    body_str = body.decode('utf-8')
+                    
+                    # Check if there are unquoted property names (common JSON error)
+                    sanitized_body = self._sanitize_json(body_str)
+                    
+                    if sanitized_body != body_str:
+                        logger.warning(f"Sanitized malformed JSON in request to {request.url.path}")
+                        
+                        # Create a new request with the sanitized body
+                        async def receive():
+                            return {"type": "http.request", "body": sanitized_body.encode()}
+                        
+                        # Override the receive method to return our sanitized body
+                        request._receive = receive
+                except Exception as e:
+                    logger.error(f"Error sanitizing JSON: {str(e)}")
+        
+        # Continue with the request
+        return await call_next(request)
+    
+    def _sanitize_json(self, json_str: str) -> str:
+        """
+        Sanitize JSON by ensuring property names are properly quoted.
+        This fixes the common error: {key: value} -> {"key": value}
+        """
+        # This regex finds property names that are not enclosed in quotes
+        # It matches: word followed by colon, not preceded by quote
+        unquoted_prop_pattern = r'(?<!")\b([a-zA-Z_][a-zA-Z0-9_]*)\s*:'
+        
+        # Replace with quoted property names
+        sanitized = re.sub(unquoted_prop_pattern, r'"\1":', json_str)
+        
+        # Validate that the result is valid JSON
+        try:
+            json.loads(sanitized)
+            return sanitized
+        except json.JSONDecodeError:
+            # If still invalid, return original to not make things worse
+            return json_str 

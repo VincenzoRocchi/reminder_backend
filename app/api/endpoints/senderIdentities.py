@@ -134,7 +134,7 @@ async def set_default_sender_identity(
     Set a sender identity as the default for its type.
     This will unset any other identity of the same type as default.
     """
-    return sender_identity_service.set_default_identity(
+    return sender_identity_service.set_default_sender_identity(
         db,
         sender_identity_id=identity_id,
         user_id=current_user.id
