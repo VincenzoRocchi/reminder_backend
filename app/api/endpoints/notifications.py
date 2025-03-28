@@ -13,19 +13,32 @@ from app.services.notification import notification_service
 
 router = APIRouter()
 
-@router.get("/", response_model=List[NotificationSchema])
+# User-specific endpoints
+@router.get("/", response_model=List[NotificationDetail])
 async def read_notifications(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-    reminder_id: Optional[int] = None,
-    client_id: Optional[int] = None,
-    status: Optional[str] = None,
+    skip: int = Query(0, description="Number of records to skip"),
+    limit: int = Query(100, description="Maximum number of records to return"),
+    reminder_id: Optional[int] = Query(None, description="Filter by reminder ID"),
+    client_id: Optional[int] = Query(None, description="Filter by client ID"),
+    status: Optional[str] = Query(None, description="Filter by notification status (PENDING, SENT, FAILED)"),
+    notification_type: Optional[str] = Query(None, description="Filter by notification type"),
+    start_date: Optional[datetime] = Query(None, description="Filter by notifications created after this date"),
+    end_date: Optional[datetime] = Query(None, description="Filter by notifications created before this date"),
 ):
     """
-    Retrieve notifications for the current user.
-    Filter by reminder, client, or status if provided.
+    Retrieve notifications for the current user with flexible filtering options.
+    
+    This endpoint supports filtering by:
+    - reminder_id: Get notifications for a specific reminder
+    - client_id: Get notifications for a specific client
+    - status: Get notifications with a specific status (PENDING, SENT, FAILED)
+    - notification_type: Filter by notification type
+    - start_date: Filter by notifications created after this date
+    - end_date: Filter by notifications created before this date
+    
+    The response includes detailed information about related entities (reminder, client).
     """
     if status:
         try:
@@ -39,113 +52,84 @@ async def read_notifications(
     else:
         status_enum = None
 
-    return notification_service.get_notifications(
+    return notification_service.get_detailed_user_notifications(
         db,
         user_id=current_user.id,
         skip=skip,
         limit=limit,
         reminder_id=reminder_id,
         client_id=client_id,
-        status=status_enum
+        status=status_enum,
+        notification_type=notification_type,
+        start_date=start_date,
+        end_date=end_date
     )
 
-@router.get("/pending", response_model=List[NotificationSchema])
-async def read_pending_notifications(
+@router.get("/count", response_model=dict)
+async def count_user_notifications(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+):
+    """
+    Get counts of notifications by status for the current user.
+    
+    Returns a summary of pending, sent, failed, and total notifications.
+    """
+    counts = notification_service.get_user_notification_counts(
+        db,
+        user_id=current_user.id
+    )
+    
+    return counts
+
+@router.get("/filters", response_model=List[NotificationSchema])
+async def filter_notifications(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_user)],
     skip: int = 0,
     limit: int = 100,
+    reminder_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    notification_type: Optional[str] = None,
+    status: Optional[str] = None,
+    start_date: Optional[datetime] = Query(None, description="Filter by notifications created after this date (ISO format)"),
+    end_date: Optional[datetime] = Query(None, description="Filter by notifications created before this date (ISO format)"),
 ):
     """
-    Retrieve all pending notifications for the current user.
+    Advanced filtering of notifications with multiple parameters.
+    
+    All filters are optional and can be combined for precise queries.
     """
-    return notification_service.get_user_notifications_by_status(
+    # Parse status enum if provided
+    status_enum = None
+    if status:
+        try:
+            status_enum = NotificationStatusEnum(status)
+        except ValueError:
+            raise AppException(
+                message=f"Invalid status value: {status}",
+                code="INVALID_STATUS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+    return notification_service.filter_notifications(
         db,
         user_id=current_user.id,
-        status=NotificationStatusEnum.PENDING,
         skip=skip,
-        limit=limit
-    )
-
-@router.get("/failed", response_model=List[NotificationSchema])
-async def read_failed_notifications(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-):
-    """
-    Retrieve all failed notifications for the current user.
-    """
-    return notification_service.get_user_notifications_by_status(
-        db,
-        user_id=current_user.id,
-        status=NotificationStatusEnum.FAILED,
-        skip=skip,
-        limit=limit
-    )
-
-@router.get("/sent", response_model=List[NotificationSchema])
-async def read_sent_notifications(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-):
-    """
-    Retrieve all sent notifications for the current user.
-    """
-    return notification_service.get_user_notifications_by_status(
-        db,
-        user_id=current_user.id,
-        status=NotificationStatusEnum.SENT,
-        skip=skip,
-        limit=limit
-    )
-
-@router.get("/by-reminder/{reminder_id}", response_model=List[NotificationSchema])
-async def read_notifications_by_reminder(
-    reminder_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-):
-    """
-    Retrieve all notifications for a specific reminder.
-    """
-    return notification_service.get_notifications(
-        db,
-        user_id=current_user.id,
+        limit=limit,
         reminder_id=reminder_id,
-        skip=skip,
-        limit=limit
-    )
-
-@router.get("/by-client/{client_id}", response_model=List[NotificationSchema])
-async def read_notifications_by_client(
-    client_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-):
-    """
-    Retrieve all notifications for a specific client.
-    """
-    return notification_service.get_notifications(
-        db,
-        user_id=current_user.id,
         client_id=client_id,
-        skip=skip,
-        limit=limit
+        notification_type=notification_type,
+        status=status_enum,
+        start_date=start_date,
+        end_date=end_date
     )
 
 @router.get("/{notification_id}", response_model=NotificationDetail)
 async def read_notification(
-    notification_id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_user)],
+    notification_id: int = Path(..., description="The ID of the notification to retrieve"),
 ):
     """
     Get a specific notification by ID with detailed information.
@@ -156,14 +140,14 @@ async def read_notification(
         user_id=current_user.id
     )
 
-@router.post("/", response_model=NotificationSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/admin/create", response_model=NotificationSchema, status_code=status.HTTP_201_CREATED)
 async def create_notification(
     notification_in: Annotated[NotificationCreate, Body()],
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
+    current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
 ):
     """
-    Manually create a new notification.
+    [Admin Only] Manually create a new notification.
     
     This endpoint allows creating notifications directly, which can be useful for 
     testing or special cases outside the normal reminder flow.
@@ -182,7 +166,12 @@ async def update_notification(
     current_user: Annotated[UserModel, Depends(get_current_user)],
 ):
     """
-    Update a notification's status, sent_at, or error_message.
+    Update a notification's sent_at or error_message.
+    
+    Note: Status changes should be made through dedicated endpoints:
+    - /notifications/{id}/mark-as-sent
+    - /notifications/{id}/mark-as-failed
+    - /notifications/{id}/mark-as-cancelled
     """
     return notification_service.update_notification(
         db,
@@ -296,17 +285,17 @@ async def batch_resend_failed_notifications(
         "count": count
     }
 
-# Superuser-only endpoint to get all notifications across users
+# Superuser-only endpoints
 @router.get("/admin/all", response_model=List[NotificationSchema])
 async def read_all_notifications(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
-    skip: int = 0,
-    limit: int = 100,
-    reminder_id: Optional[int] = None,
-    client_id: Optional[int] = None,
-    user_id: Optional[int] = None,
-    status: Optional[str] = None,
+    skip: int = Query(0, description="Number of records to skip"),
+    limit: int = Query(100, description="Maximum number of records to return"),
+    reminder_id: Optional[int] = Query(None, description="Filter by reminder ID"),
+    client_id: Optional[int] = Query(None, description="Filter by client ID"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    status: Optional[str] = Query(None, description="Filter by notification status"),
 ):
     """
     [Admin Only] Retrieve notifications across all users with optional filtering.
@@ -417,66 +406,6 @@ async def batch_delete_notifications(
         "count": count
     }
 
-@router.get("/count", response_model=dict)
-async def count_user_notifications(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-):
-    """
-    Get counts of notifications by status for the current user.
-    
-    Returns a summary of pending, sent, failed, and total notifications.
-    """
-    counts = notification_service.get_user_notification_counts(
-        db,
-        user_id=current_user.id
-    )
-    
-    return counts
-
-@router.get("/filters", response_model=List[NotificationSchema])
-async def filter_notifications(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-    reminder_id: Optional[int] = None,
-    client_id: Optional[int] = None,
-    notification_type: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[datetime] = Query(None, description="Filter by notifications created after this date (ISO format)"),
-    end_date: Optional[datetime] = Query(None, description="Filter by notifications created before this date (ISO format)"),
-):
-    """
-    Advanced filtering of notifications with multiple parameters.
-    
-    All filters are optional and can be combined for precise queries.
-    """
-    # Parse status enum if provided
-    status_enum = None
-    if status:
-        try:
-            status_enum = NotificationStatusEnum(status)
-        except ValueError:
-            raise AppException(
-                message=f"Invalid status value: {status}",
-                code="INVALID_STATUS",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-
-    return notification_service.filter_notifications(
-        db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        reminder_id=reminder_id,
-        client_id=client_id,
-        notification_type=notification_type,
-        status=status_enum,
-        start_date=start_date,
-        end_date=end_date
-    )
-
 @router.get("/admin/stats", response_model=dict)
 async def get_notification_stats(
     db: Annotated[Session, Depends(get_db)],
@@ -534,36 +463,3 @@ async def admin_resend_all_failed_notifications(
         "message": f"Requeued {count} failed notifications for sending",
         "count": count
     }
-
-@router.get("/detailed", response_model=List[NotificationDetail])
-async def read_detailed_notifications(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 50,
-    status: Optional[str] = None,
-):
-    """
-    Retrieve notifications with additional client and reminder details.
-    
-    This endpoint returns more detailed notification objects that include
-    the reminder title and client name for easier display in user interfaces.
-    """
-    status_enum = None
-    if status:
-        try:
-            status_enum = NotificationStatusEnum(status)
-        except ValueError:
-            raise AppException(
-                message=f"Invalid status value: {status}",
-                code="INVALID_STATUS",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-            
-    return notification_service.get_detailed_user_notifications(
-        db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        status=status_enum
-    )

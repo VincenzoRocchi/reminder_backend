@@ -55,6 +55,9 @@ class SchedulerService:
         between timely reminder delivery and system load.
         
         The scheduler will not start if DISABLE_SCHEDULER setting is True.
+        
+        Returns:
+            bool: True if scheduler was started, False if disabled
         """
         from app.core.settings import settings
         
@@ -63,7 +66,7 @@ class SchedulerService:
         # Check if scheduler should be disabled via configuration
         if getattr(settings, "DISABLE_SCHEDULER", False):
             logger.info("Scheduler disabled via DISABLE_SCHEDULER setting")
-            return
+            return False
         
         # Add job to process reminders every minute
         self.scheduler.add_job(
@@ -75,6 +78,8 @@ class SchedulerService:
         
         # Start the scheduler - after this point, jobs will begin executing
         self.scheduler.start()
+        logger.info("Scheduler service started successfully")
+        return True
     
     async def process_reminders(self):
         """

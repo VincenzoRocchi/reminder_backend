@@ -25,6 +25,10 @@ class NotificationService:
     """
     Service layer for Notification operations.
     Handles business logic and uses the repository for data access.
+    
+    Notifications are created as part of the reminder system:
+    1. When a reminder is triggered (create_and_send_notifications_for_reminder)
+    2. When notifications are pre-generated for a reminder (generate_notifications_for_reminder)
     """
     
     def __init__(self):
@@ -36,33 +40,43 @@ class NotificationService:
         self, 
         db: Session, 
         *, 
-        notification_id: int
+        notification_id: int,
+        user_id: Optional[int] = None
     ) -> Notification:
         """
-        Get a notification by ID.
+        Get a notification by ID with optional user permission check.
         
         Args:
             db: Database session
             notification_id: Notification ID
+            user_id: Optional user ID for permission checking
             
         Returns:
             Notification: Notification object
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If user doesn't own the notification
         """
         notification = self.repository.get(db, id=notification_id)
         if not notification:
             raise NotificationNotFoundError(
                 f"Notification with ID {notification_id} not found"
             )
+            
+        if user_id and notification.user_id != user_id:
+            raise InvalidOperationError(
+                "You don't have permission to access this notification"
+            )
+            
         return notification
     
     def get_notification_detail(
         self, 
         db: Session, 
         *, 
-        notification_id: int
+        notification_id: int,
+        user_id: Optional[int] = None
     ) -> NotificationDetail:
         """
         Get a notification with extra details.
@@ -70,6 +84,7 @@ class NotificationService:
         Args:
             db: Database session
             notification_id: Notification ID
+            user_id: Optional user ID for permission checking
             
         Returns:
             NotificationDetail: Notification with extra details
@@ -78,8 +93,9 @@ class NotificationService:
             NotificationNotFoundError: If notification not found
             ReminderNotFoundError: If reminder not found
             ClientNotFoundError: If client not found
+            InvalidOperationError: If user doesn't own the notification
         """
-        notification = self.get_notification(db, notification_id=notification_id)
+        notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
         
         # Get reminder details
         reminder = self.reminder_repository.get(db, id=notification.reminder_id)
@@ -103,160 +119,40 @@ class NotificationService:
             client_name=client.name
         )
     
-    def get_reminder_notifications(
+    def get_notifications(
         self, 
         db: Session, 
-        *, 
-        reminder_id: int,
+        *,
+        user_id: int,  # Required for permission checking
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        reminder_id: Optional[int] = None,
+        client_id: Optional[int] = None,
+        status: Optional[NotificationStatusEnum] = None
     ) -> List[Notification]:
         """
-        Get all notifications for a reminder.
+        Get notifications with flexible filtering options.
         
         Args:
             db: Database session
-            reminder_id: Reminder ID
+            user_id: User ID for permission checking
             skip: Number of records to skip
             limit: Maximum number of records to return
+            reminder_id: Filter by reminder ID
+            client_id: Filter by client ID
+            status: Filter by notification status
             
         Returns:
             List[Notification]: List of notifications
         """
-        return self.repository.get_by_reminder_id(
+        return self.repository.get_filtered(
             db,
+            user_id=user_id,
+            skip=skip,
+            limit=limit,
             reminder_id=reminder_id,
-            skip=skip,
-            limit=limit
-        )
-    
-    def get_client_notifications(
-        self, 
-        db: Session, 
-        *, 
-        client_id: int,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Notification]:
-        """
-        Get all notifications for a client.
-        
-        Args:
-            db: Database session
-            client_id: Client ID
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            
-        Returns:
-            List[Notification]: List of notifications
-        """
-        return self.repository.get_by_client_id(
-            db,
             client_id=client_id,
-            skip=skip,
-            limit=limit
-        )
-    
-    def get_notifications_by_status(
-        self, 
-        db: Session, 
-        *, 
-        status: NotificationStatusEnum,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Notification]:
-        """
-        Get all notifications with a specific status.
-        
-        Args:
-            db: Database session
-            status: Notification status
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            
-        Returns:
-            List[Notification]: List of notifications
-        """
-        return self.repository.get_by_status(
-            db,
-            status=status,
-            skip=skip,
-            limit=limit
-        )
-    
-    def get_notifications_by_type(
-        self, 
-        db: Session, 
-        *, 
-        notification_type: str,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Notification]:
-        """
-        Get all notifications of a specific type.
-        
-        Args:
-            db: Database session
-            notification_type: Type of notification (EMAIL, SMS, WHATSAPP)
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            
-        Returns:
-            List[Notification]: List of notifications
-        """
-        return self.repository.get_by_type(
-            db,
-            notification_type=notification_type,
-            skip=skip,
-            limit=limit
-        )
-    
-    def get_pending_notifications(
-        self, 
-        db: Session, 
-        *, 
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Notification]:
-        """
-        Get all pending notifications.
-        
-        Args:
-            db: Database session
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            
-        Returns:
-            List[Notification]: List of pending notifications
-        """
-        return self.repository.get_pending_notifications(
-            db,
-            skip=skip,
-            limit=limit
-        )
-    
-    def get_failed_notifications(
-        self, 
-        db: Session, 
-        *, 
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Notification]:
-        """
-        Get all failed notifications.
-        
-        Args:
-            db: Database session
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            
-        Returns:
-            List[Notification]: List of failed notifications
-        """
-        return self.repository.get_failed_notifications(
-            db,
-            skip=skip,
-            limit=limit
+            status=status
         )
     
     def create_notification(
@@ -300,7 +196,8 @@ class NotificationService:
         db: Session, 
         *, 
         notification_id: int,
-        notification_in: NotificationUpdate | Dict[str, Any]
+        notification_in: NotificationUpdate | Dict[str, Any],
+        user_id: Optional[int] = None
     ) -> Notification:
         """
         Update a notification.
@@ -309,21 +206,38 @@ class NotificationService:
             db: Database session
             notification_id: Notification ID
             notification_in: Update data
+            user_id: Optional user ID for permission checking
             
         Returns:
             Notification: Updated notification
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If user doesn't own the notification
+            
+        Note:
+            This method doesn't update the status field directly.
+            Use mark_as_sent, mark_as_failed, or mark_as_cancelled methods instead.
         """
-        notification = self.get_notification(db, notification_id=notification_id)
+        notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
+        
+        # Remove status from update data if present
+        if isinstance(notification_in, dict) and "status" in notification_in:
+            notification_in = notification_in.copy()
+            del notification_in["status"]
+        elif hasattr(notification_in, "status") and notification_in.status is not None:
+            # Create a copy of the data without the status field
+            notification_dict = notification_in.model_dump(exclude={"status"})
+            notification_in = NotificationUpdate(**notification_dict)
+        
         return self.repository.update(db, db_obj=notification, obj_in=notification_in)
     
     def delete_notification(
         self, 
         db: Session, 
         *, 
-        notification_id: int
+        notification_id: int,
+        user_id: Optional[int] = None
     ) -> Notification:
         """
         Delete a notification.
@@ -331,21 +245,24 @@ class NotificationService:
         Args:
             db: Database session
             notification_id: Notification ID
+            user_id: Optional user ID for permission checking
             
         Returns:
             Notification: Deleted notification
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If user doesn't own the notification
         """
-        notification = self.get_notification(db, notification_id=notification_id)
+        notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
         return self.repository.delete(db, id=notification_id)
     
     def mark_as_sent(
         self, 
         db: Session, 
         *, 
-        notification_id: int
+        notification_id: int,
+        user_id: Optional[int] = None
     ) -> Notification:
         """
         Mark a notification as sent.
@@ -353,14 +270,16 @@ class NotificationService:
         Args:
             db: Database session
             notification_id: Notification ID
+            user_id: Optional user ID for permission checking
             
         Returns:
             Notification: Updated notification
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If user doesn't own the notification
         """
-        notification = self.get_notification(db, notification_id=notification_id)
+        notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
         return self.repository.mark_as_sent(db, notification_id=notification_id)
     
     def mark_as_failed(
@@ -368,7 +287,8 @@ class NotificationService:
         db: Session, 
         *, 
         notification_id: int,
-        error_message: str
+        error_message: str,
+        user_id: Optional[int] = None
     ) -> Notification:
         """
         Mark a notification as failed.
@@ -377,14 +297,16 @@ class NotificationService:
             db: Database session
             notification_id: Notification ID
             error_message: Error message
+            user_id: Optional user ID for permission checking
             
         Returns:
             Notification: Updated notification
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If user doesn't own the notification
         """
-        notification = self.get_notification(db, notification_id=notification_id)
+        notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
         return self.repository.mark_as_failed(
             db,
             notification_id=notification_id,
@@ -395,7 +317,8 @@ class NotificationService:
         self, 
         db: Session, 
         *, 
-        notification_id: int
+        notification_id: int,
+        user_id: Optional[int] = None
     ) -> Notification:
         """
         Mark a notification as cancelled.
@@ -403,14 +326,16 @@ class NotificationService:
         Args:
             db: Database session
             notification_id: Notification ID
+            user_id: Optional user ID for permission checking
             
         Returns:
             Notification: Updated notification
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If user doesn't own the notification
         """
-        notification = self.get_notification(db, notification_id=notification_id)
+        notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
         return self.repository.mark_as_cancelled(db, notification_id=notification_id)
     
     async def create_and_send_notifications_for_reminder(self, db: Session, *, reminder) -> None:
@@ -571,51 +496,6 @@ class NotificationService:
         # Create and send notification
         self.create_and_send_notifications_for_reminder(db, reminder=reminder)
     
-    def get_notifications(
-        self, 
-        db: Session, 
-        *,
-        user_id: int,  # Required for permission checking
-        skip: int = 0,
-        limit: int = 100,
-        reminder_id: Optional[int] = None,
-        client_id: Optional[int] = None,
-        status: Optional[NotificationStatusEnum] = None
-    ) -> List[Notification]:
-        """
-        Get notifications with optional filtering.
-        All notifications returned will belong to the specified user.
-        
-        Args:
-            db: Database session
-            user_id: User ID for filtering and permission check
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            reminder_id: Optional reminder ID filter
-            client_id: Optional client ID filter
-            status: Optional status filter
-            
-        Returns:
-            List[Notification]: List of notifications
-        """
-        # Build query with user_id filter
-        query = db.query(self.repository.model).filter(
-            self.repository.model.user_id == user_id
-        )
-        
-        # Add optional filters
-        if reminder_id is not None:
-            query = query.filter(self.repository.model.reminder_id == reminder_id)
-        
-        if client_id is not None:
-            query = query.filter(self.repository.model.client_id == client_id)
-        
-        if status is not None:
-            query = query.filter(self.repository.model.status == status)
-        
-        # Return paginated results
-        return query.offset(skip).limit(limit).all()
-    
     def get_user_notifications(
         self, 
         db: Session, 
@@ -673,6 +553,78 @@ class NotificationService:
             limit=limit
         )
     
+    def get_detailed_user_notifications(
+        self, 
+        db: Session, 
+        *,
+        user_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        reminder_id: Optional[int] = None,
+        client_id: Optional[int] = None,
+        status: Optional[NotificationStatusEnum] = None,
+        notification_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[NotificationDetail]:
+        """
+        Get detailed notifications for a user with flexible filtering options.
+        
+        Args:
+            db: Database session
+            user_id: User ID for permission checking
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            reminder_id: Filter by reminder ID
+            client_id: Filter by client ID
+            status: Filter by notification status
+            notification_type: Filter by notification type
+            start_date: Filter by notifications created after this date
+            end_date: Filter by notifications created before this date
+            
+        Returns:
+            List[NotificationDetail]: List of notifications with details
+        """
+        # Get filtered notifications
+        notifications = self.repository.get_filtered(
+            db,
+            user_id=user_id,
+            skip=skip,
+            limit=limit,
+            reminder_id=reminder_id,
+            client_id=client_id,
+            status=status,
+            notification_type=notification_type,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        # Create detailed notifications
+        detailed_notifications = []
+        for notification in notifications:
+            # Get reminder details
+            reminder = self.reminder_repository.get(db, id=notification.reminder_id)
+            if not reminder:
+                continue
+                
+            # Get client details
+            client = self.client_repository.get(db, id=notification.client_id)
+            if not client:
+                continue
+            
+            # Create NotificationDetail object
+            notification_data = NotificationSchema.model_validate(notification).model_dump()
+            detailed_notifications.append(
+                NotificationDetail(
+                    **notification_data,
+                    reminder_title=reminder.title,
+                    client_name=client.name
+                )
+            )
+        
+        return detailed_notifications
+
+    # Admin-specific methods
     def get_all_notifications(
         self, 
         db: Session, 
@@ -682,42 +634,41 @@ class NotificationService:
         reminder_id: Optional[int] = None,
         client_id: Optional[int] = None,
         user_id: Optional[int] = None,
-        status: Optional[NotificationStatusEnum] = None
+        status: Optional[NotificationStatusEnum] = None,
+        notification_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
     ) -> List[Notification]:
         """
-        Get all notifications across users with optional filtering.
-        For admin/superuser use only.
+        [Admin Only] Get all notifications with flexible filtering options.
         
         Args:
             db: Database session
             skip: Number of records to skip
             limit: Maximum number of records to return
-            reminder_id: Optional reminder ID filter
-            client_id: Optional client ID filter
-            user_id: Optional user ID filter
-            status: Optional status filter
+            reminder_id: Filter by reminder ID
+            client_id: Filter by client ID
+            user_id: Filter by user ID
+            status: Filter by notification status
+            notification_type: Filter by notification type
+            start_date: Filter by notifications created after this date
+            end_date: Filter by notifications created before this date
             
         Returns:
             List[Notification]: List of notifications
         """
-        # Build base query
-        query = db.query(self.repository.model)
-        
-        # Add optional filters
-        if reminder_id is not None:
-            query = query.filter(self.repository.model.reminder_id == reminder_id)
-        
-        if client_id is not None:
-            query = query.filter(self.repository.model.client_id == client_id)
-            
-        if user_id is not None:
-            query = query.filter(self.repository.model.user_id == user_id)
-        
-        if status is not None:
-            query = query.filter(self.repository.model.status == status)
-        
-        # Return paginated results
-        return query.order_by(self.repository.model.created_at.desc()).offset(skip).limit(limit).all()
+        return self.repository.get_filtered(
+            db,
+            skip=skip,
+            limit=limit,
+            reminder_id=reminder_id,
+            client_id=client_id,
+            user_id=user_id,
+            status=status,
+            notification_type=notification_type,
+            start_date=start_date,
+            end_date=end_date
+        )
     
     def generate_notifications_for_reminder(
         self, 
@@ -956,65 +907,6 @@ class NotificationService:
         
         return counts
     
-    def filter_notifications(
-        self, 
-        db: Session, 
-        *,
-        user_id: int,
-        skip: int = 0,
-        limit: int = 100,
-        reminder_id: Optional[int] = None,
-        client_id: Optional[int] = None,
-        notification_type: Optional[str] = None,
-        status: Optional[NotificationStatusEnum] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
-    ) -> List[Notification]:
-        """
-        Advanced filtering of notifications with multiple parameters.
-        
-        Args:
-            db: Database session
-            user_id: User ID for permission check
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            reminder_id: Optional reminder ID filter
-            client_id: Optional client ID filter
-            notification_type: Optional notification type filter
-            status: Optional status filter
-            start_date: Optional start date filter (created after this date)
-            end_date: Optional end date filter (created before this date)
-            
-        Returns:
-            List[Notification]: List of notifications matching filters
-        """
-        # Build base query with user_id filter for security
-        query = db.query(Notification).filter(
-            Notification.user_id == user_id
-        )
-        
-        # Add optional filters
-        if reminder_id is not None:
-            query = query.filter(Notification.reminder_id == reminder_id)
-        
-        if client_id is not None:
-            query = query.filter(Notification.client_id == client_id)
-            
-        if notification_type is not None:
-            query = query.filter(Notification.notification_type == notification_type)
-            
-        if status is not None:
-            query = query.filter(Notification.status == status)
-            
-        if start_date is not None:
-            query = query.filter(Notification.created_at >= start_date)
-            
-        if end_date is not None:
-            query = query.filter(Notification.created_at <= end_date)
-        
-        # Return paginated results ordered by most recent first
-        return query.order_by(Notification.created_at.desc()).offset(skip).limit(limit).all()
-    
     def get_notification_stats(self, db: Session) -> Dict[str, Any]:
         """
         Get global notification statistics.
@@ -1148,62 +1040,6 @@ class NotificationService:
         db.commit()
         
         return count
-
-    def get_detailed_user_notifications(
-        self, 
-        db: Session, 
-        *,
-        user_id: int,
-        skip: int = 0,
-        limit: int = 50,
-        status: Optional[NotificationStatusEnum] = None
-    ) -> List[NotificationDetail]:
-        """
-        Get detailed notifications for a user with client and reminder details.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            status: Optional status filter
-            
-        Returns:
-            List[NotificationDetail]: List of detailed notifications
-        """
-        # Get basic notifications first
-        query = db.query(Notification).filter(Notification.user_id == user_id)
-        
-        if status is not None:
-            query = query.filter(Notification.status == status)
-            
-        notifications = query.order_by(
-            Notification.created_at.desc()
-        ).offset(skip).limit(limit).all()
-        
-        # Convert to detailed notifications
-        detailed_notifications = []
-        for notification in notifications:
-            # Get reminder details
-            reminder = self.reminder_repository.get(db, id=notification.reminder_id)
-            if not reminder:
-                continue
-                
-            # Get client details
-            client = self.client_repository.get(db, id=notification.client_id)
-            if not client:
-                continue
-                
-            # Create detailed notification
-            notification_data = NotificationSchema.model_validate(notification).model_dump()
-            detailed_notification = NotificationDetail(
-                **notification_data,
-                reminder_title=reminder.title,
-                client_name=client.name
-            )
-            detailed_notifications.append(detailed_notification)
-            
-        return detailed_notifications
 
 # Create singleton instance
 notification_service = NotificationService() 

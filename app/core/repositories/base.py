@@ -2,6 +2,7 @@ from typing import Generic, TypeVar, Type, Optional, List, Any, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update, delete
 from pydantic import BaseModel
+from datetime import datetime
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
@@ -63,18 +64,22 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         
         return query.offset(skip).limit(limit).all()
     
-    def create(self, db: Session, *, obj_in: CreateSchemaType) -> ModelType:
+    def create(self, db: Session, *, obj_in: CreateSchemaType | Dict[str, Any]) -> ModelType:
         """
         Create a new record.
         
         Args:
             db: Database session
-            obj_in: Pydantic model with data to create
+            obj_in: Pydantic model or dict with data to create
             
         Returns:
             ModelType: Created record
         """
-        obj_in_data = obj_in.model_dump()
+        if isinstance(obj_in, dict):
+            obj_in_data = obj_in
+        else:
+            obj_in_data = obj_in.model_dump()
+            
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
         db.commit()
@@ -161,4 +166,75 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 if hasattr(self.model, key):
                     query = query.filter(getattr(self.model, key) == value)
         
-        return query.count() 
+        return query.count()
+    
+    def get_filtered(
+        self, 
+        db: Session, 
+        *,
+        user_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100,
+        reminder_id: Optional[int] = None,
+        client_id: Optional[int] = None,
+        status: Optional[Any] = None,
+        notification_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        **kwargs
+    ) -> List[ModelType]:
+        """
+        Get records with flexible filtering options.
+        
+        Args:
+            db: Database session
+            user_id: Optional User ID for filtering
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            reminder_id: Filter by reminder ID
+            client_id: Filter by client ID
+            status: Filter by status
+            notification_type: Filter by notification type
+            start_date: Filter by records created after this date
+            end_date: Filter by records created before this date
+            **kwargs: Additional filters
+            
+        Returns:
+            List[ModelType]: List of records
+        """
+        # Start with base query
+        query = db.query(self.model)
+        
+        # Add filters
+        if user_id is not None and hasattr(self.model, 'user_id'):
+            query = query.filter(self.model.user_id == user_id)
+            
+        if reminder_id is not None and hasattr(self.model, 'reminder_id'):
+            query = query.filter(self.model.reminder_id == reminder_id)
+            
+        if client_id is not None and hasattr(self.model, 'client_id'):
+            query = query.filter(self.model.client_id == client_id)
+            
+        if status is not None and hasattr(self.model, 'status'):
+            query = query.filter(self.model.status == status)
+            
+        if notification_type is not None and hasattr(self.model, 'notification_type'):
+            query = query.filter(self.model.notification_type == notification_type)
+            
+        if start_date is not None and hasattr(self.model, 'created_at'):
+            query = query.filter(self.model.created_at >= start_date)
+            
+        if end_date is not None and hasattr(self.model, 'created_at'):
+            query = query.filter(self.model.created_at <= end_date)
+            
+        # Add any additional filters
+        for key, value in kwargs.items():
+            if hasattr(self.model, key):
+                query = query.filter(getattr(self.model, key) == value)
+        
+        # Order by creation date (newest first) if the model has created_at
+        if hasattr(self.model, 'created_at'):
+            query = query.order_by(self.model.created_at.desc())
+            
+        # Apply pagination
+        return query.offset(skip).limit(limit).all() 

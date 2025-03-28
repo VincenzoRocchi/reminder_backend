@@ -19,8 +19,14 @@ class NotificationCreateDB(NotificationBase):
     user_id: int
 
 class NotificationUpdate(BaseModel):
-    """Schema for updating a notification"""
-    status: Optional[ReminderStatus] = None
+    """
+    Schema for updating a notification
+    
+    Note: Status changes should be made through dedicated endpoints:
+    - mark-as-sent
+    - mark-as-failed
+    - mark-as-cancelled
+    """
     sent_at: Optional[datetime] = None
     error_message: Optional[str] = None
 

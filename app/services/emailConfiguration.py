@@ -149,12 +149,12 @@ class EmailConfigurationService:
                 f"Email configuration with email '{obj_in.email_from}' already exists"
             )
         
-        # Create new configuration
-        db_obj = EmailConfiguration(
-            **obj_in.model_dump(),
-            user_id=user_id
-        )
-        return email_configuration_repository.create(db, obj_in=db_obj)
+        # Create a dict with all data for the new configuration
+        obj_in_data = obj_in.model_dump()
+        obj_in_data["user_id"] = user_id
+        
+        # Use the repository to create the model correctly
+        return email_configuration_repository.create(db, obj_in=obj_in_data)
     
     def update_email_configuration(
         self, 
