@@ -52,17 +52,14 @@ class EmailConfiguration(Base):
         """Set and encrypt SMTP password"""
         original_value = self._smtp_password
         try:
-            if value is None:
+            if value is None or value == "":
                 self._smtp_password = None
                 return
 
-            # Only enforce length requirement if strict validation is enabled
-            if settings.should_validate('format') and len(value) < 8:
-                logger.warning(f"SMTP password too short | ConfigID:{self.id} | STRICT_VALIDATION: {settings.STRICT_VALIDATION}")
-                
-                if settings.STRICT_VALIDATION:
-                    raise InvalidConfigurationError("SMTP", "Password must be at least 8 characters")
-                # If not strict, continue despite validation failure
+            # Validate password length only if a non-empty value is provided
+            if value and len(value) < 8:
+                logger.warning(f"SMTP password too short | ConfigID:{self.id}")
+                raise InvalidConfigurationError("SMTP", "Password must be at least 8 characters")
 
             self._smtp_password = encryption_service.encrypt_string(value)
             logger.info(f"SMTP password updated | ConfigID:{self.id}")

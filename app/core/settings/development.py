@@ -27,17 +27,8 @@ class DevelopmentSettings(BaseAppSettings):
         
         return DevelopmentSettings._dev_secret_key
     
-    # Updated to log a warning instead of raising an error if STRICT_VALIDATION=True
-    @field_validator('STRICT_VALIDATION')
-    def validate_strict_validation(cls, v):
-        # Log warning if STRICT_VALIDATION=True in development
-        if v is True:
-            logger.warning(
-                "STRICT_VALIDATION is set to True in development environment. "
-                "This might make debugging more difficult as validation errors will cause exceptions instead of warnings. "
-                "Consider setting STRICT_VALIDATION=False for easier debugging if needed."
-            )
-        return v
+    # Note that validation is now always enforced across all environments
+    # No special handling for development environment
     
     # Validate that we're using DEBUG or INFO log level in development
     @field_validator('LOG_LEVEL')

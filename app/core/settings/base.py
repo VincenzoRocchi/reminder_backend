@@ -132,41 +132,9 @@ class BaseAppSettings(BaseSettings):
         return self.ENV == "testing"
     
     STRICT_VALIDATION: bool = Field(
-        default=os.getenv("STRICT_VALIDATION", "True" if ENV != "development" else "False").lower() == "true",
-        description="Enforce strict validation of sensitive data"
+        default=os.getenv("STRICT_VALIDATION", "True").lower() == "true",
+        description="Enforce strict validation of sensitive data (should be True in all environments)"
     )
-    
-    # Add the missing should_validate method
-    def should_validate(self, validation_type: str = 'all') -> bool:
-        """
-        Determines if validation should be enforced based on settings.
-        
-        Args:
-            validation_type: Type of validation to check ('all', 'format', 'security', etc.)
-            
-        Returns:
-            bool: True if validation should be enforced, False otherwise
-        """
-        # If strict validation is enabled, always validate
-        if self.STRICT_VALIDATION:
-            return True
-            
-        # For critical security validations, always validate regardless of STRICT_VALIDATION
-        if validation_type == 'security':
-            return True
-            
-        # In development, be more lenient with some validation types
-        if self.IS_DEVELOPMENT:
-            # We might want to allow some validation types to be bypassed in development
-            if validation_type in ['format', 'length']:
-                return False
-        
-        # In production, always validate unless explicitly disabled
-        if self.IS_PRODUCTION:
-            return True
-            
-        # Default behavior for other environments/validation types
-        return False
     
     # ------------------------------
     # LOGGING SETTINGS

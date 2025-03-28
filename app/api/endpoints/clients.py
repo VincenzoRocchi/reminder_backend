@@ -23,7 +23,7 @@ async def read_clients(
     Retrieve all clients for the current user.
     Optionally filter by search term in name or email.
     """
-    return client_service.get_user_clients(
+    return client_service.get_clients_by_user_id(
         db,
         user_id=current_user.id,
         skip=skip,
