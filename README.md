@@ -20,7 +20,7 @@ A comprehensive backend system for businesses (such as accounting firms) to mana
 | **Backend API** | FastAPI (Python) |
 | **Database** | AWS RDS (MySQL) |
 | **ORM** | SQLAlchemy |
-| **Migrations** | Alembic |
+| **Migrations** | Manual |
 | **Notifications** | SMTP (Email), Twilio (SMS), WhatsApp Business API |
 | **Payment Processing** | Stripe API |
 | **Deployment** | Docker + AWS EC2/ECS |
@@ -227,8 +227,7 @@ set ENV=development     # Windows CMD
 $env:ENV = "development"  # PowerShell
 
 # Run migrations
-alembic upgrade head
-```
+# Database migrations are handled manually```
 
 #### 6. Start the Application
 
