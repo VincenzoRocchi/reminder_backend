@@ -20,6 +20,85 @@ from app.core.exceptions import (
     InvalidOperationError
 )
 from app.core.error_handling import handle_exceptions, with_transaction
+from app.events.utils import emit_event_safely, with_event_emission
+from app.events.definitions.reminder_events import (
+    create_reminder_created_event,
+    create_reminder_updated_event,
+    create_reminder_deleted_event,
+    create_reminder_due_event
+)
+
+# Event factory functions for decorators
+def make_reminder_created_event(service, db, reminder_in, user_id, result):
+    """
+    Create a reminder created event.
+    
+    Args:
+        service: The service instance
+        db: Database session
+        reminder_in: Reminder creation schema
+        user_id: User ID
+        result: Created reminder (function result)
+        
+    Returns:
+        Event for reminder created
+    """
+    return create_reminder_created_event(
+        reminder_id=result.id,
+        user_id=result.user_id,
+        title=result.title,
+        reminder_type=result.reminder_type,
+        notification_type=result.notification_type,
+        reminder_date=result.reminder_date,
+        is_recurring=result.is_recurring,
+        recurrence_pattern=result.recurrence_pattern
+    )
+
+def make_reminder_updated_event(service, db, reminder_id, reminder_in, user_id, result):
+    """
+    Create a reminder updated event.
+    
+    Args:
+        service: The service instance
+        db: Database session
+        reminder_id: Reminder ID
+        reminder_in: Reminder update schema
+        user_id: User ID
+        result: Updated reminder (function result)
+        
+    Returns:
+        Event for reminder updated
+    """
+    return create_reminder_updated_event(
+        reminder_id=result.id,
+        user_id=result.user_id,
+        title=result.title,
+        reminder_type=result.reminder_type,
+        notification_type=result.notification_type,
+        reminder_date=result.reminder_date,
+        is_recurring=result.is_recurring,
+        recurrence_pattern=result.recurrence_pattern
+    )
+
+def make_reminder_deleted_event(service, db, reminder_id, user_id, result):
+    """
+    Create a reminder deleted event.
+    
+    Args:
+        service: The service instance
+        db: Database session
+        reminder_id: Reminder ID
+        user_id: User ID
+        result: Deleted reminder (function result)
+        
+    Returns:
+        Event for reminder deleted
+    """
+    return create_reminder_deleted_event(
+        reminder_id=reminder_id,
+        user_id=user_id,
+        title=result.title
+    )
 
 class ReminderService:
     """
@@ -123,6 +202,7 @@ class ReminderService:
     
     @with_transaction
     @handle_exceptions(error_message="Failed to create reminder")
+    @with_event_emission(make_reminder_created_event)
     def create_reminder(
         self, 
         db: Session, 
@@ -162,11 +242,15 @@ class ReminderService:
         else:
             obj_data = reminder_in.model_dump()
             obj_data["user_id"] = user_id
-            
-        return self.repository.create(db, obj_in=obj_data)
+        
+        # Create the reminder
+        created_reminder = self.repository.create(db, obj_in=obj_data)
+        
+        return created_reminder
     
     @with_transaction
     @handle_exceptions(error_message="Failed to update reminder")
+    @with_event_emission(make_reminder_updated_event)
     def update_reminder(
         self, 
         db: Session, 
@@ -189,27 +273,22 @@ class ReminderService:
             
         Raises:
             ReminderNotFoundError: If reminder not found
-            ClientNotFoundError: If client not found
             InvalidConfigurationError: If reminder configuration is invalid
         """
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
         
-        # If client_id is being changed, validate client exists and belongs to user
-        if hasattr(reminder_in, 'client_id') and reminder_in.client_id and reminder_in.client_id != reminder.client_id:
-            client = self.client_repository.get(db, id=reminder_in.client_id)
-            if not client or client.user_id != user_id:
-                raise ClientNotFoundError(f"Client with ID {reminder_in.client_id} not found")
+        # Validate updated reminder configuration
+        if getattr(reminder_in, 'is_recurring', reminder.is_recurring) and not getattr(reminder_in, 'recurrence_pattern', reminder.recurrence_pattern):
+            raise InvalidConfigurationError("Recurring reminders must have a recurrence pattern")
         
-        # Validate recurrence pattern if set to recurring
-        if hasattr(reminder_in, 'is_recurring') and reminder_in.is_recurring:
-            # If reminder is being set to recurring, ensure it has a recurrence pattern
-            if not reminder.recurrence_pattern and not getattr(reminder_in, 'recurrence_pattern', None):
-                raise InvalidConfigurationError("Recurring reminders must have a recurrence pattern")
-                
-        return self.repository.update(db, db_obj=reminder, obj_in=reminder_in)
+        # Update the reminder
+        updated_reminder = self.repository.update(db, db_obj=reminder, obj_in=reminder_in)
+        
+        return updated_reminder
     
     @with_transaction
     @handle_exceptions(error_message="Failed to delete reminder")
+    @with_event_emission(make_reminder_deleted_event)
     def delete_reminder(self, db: Session, *, reminder_id: int, user_id: int) -> Reminder:
         """
         Delete a reminder.
@@ -226,10 +305,15 @@ class ReminderService:
             ReminderNotFoundError: If reminder not found
         """
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
-        return self.repository.delete(db, id=reminder_id)
+        
+        # Delete the reminder
+        deleted_reminder = self.repository.delete(db, id=reminder_id)
+        
+        return deleted_reminder
     
     @with_transaction
     @handle_exceptions(error_message="Failed to mark reminder as active/inactive")
+    @with_event_emission(make_reminder_updated_event)
     def set_reminder_active_status(
         self, 
         db: Session, 
@@ -239,13 +323,13 @@ class ReminderService:
         is_active: bool
     ) -> Reminder:
         """
-        Set a reminder's active status.
+        Mark a reminder as active or inactive.
         
         Args:
             db: Database session
             reminder_id: Reminder ID
             user_id: User ID for authorization
-            is_active: New active status
+            is_active: Whether the reminder should be active
             
         Returns:
             Reminder: Updated reminder
@@ -254,7 +338,11 @@ class ReminderService:
             ReminderNotFoundError: If reminder not found
         """
         reminder = self.get_reminder(db, reminder_id=reminder_id, user_id=user_id)
-        return self.repository.update(db, db_obj=reminder, obj_in={"is_active": is_active})
+        
+        # Update the reminder's active status
+        updated_reminder = self.repository.update(db, db_obj=reminder, obj_in={"is_active": is_active})
+        
+        return updated_reminder
 
 # Create singleton instance
 reminder_service = ReminderService() 

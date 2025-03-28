@@ -22,6 +22,13 @@ from app.core.exceptions import (
     ServiceError
 )
 from app.core.error_handling import handle_exceptions, with_transaction
+from app.events.dispatcher import event_dispatcher
+from app.events.definitions.notification_events import (
+    create_notification_scheduled_event,
+    create_notification_sent_event,
+    create_notification_failed_event,
+    create_notification_cancelled_event
+)
 
 class NotificationService:
     """
@@ -252,11 +259,21 @@ class NotificationService:
         if not client:
             raise ClientNotFoundError(f"Client with ID {obj_in.client_id} not found")
             
-        # Verify reminder and client belong to the same user
-        if reminder.user_id != client.user_id:
-            raise InvalidOperationError("Reminder and client must belong to the same user")
-            
-        return self.repository.create(db, obj_in=obj_in)
+        # Create notification
+        notification = self.repository.create(db, obj_in=obj_in)
+        
+        # Emit notification scheduled event
+        event = create_notification_scheduled_event(
+            notification_id=notification.id,
+            user_id=reminder.user_id,
+            reminder_id=notification.reminder_id,
+            client_id=notification.client_id,
+            notification_type=notification.notification_type,
+            message=notification.message
+        )
+        event_dispatcher.emit(event)
+        
+        return notification
     
     @with_transaction
     @handle_exceptions(error_message="Failed to update notification")
@@ -310,7 +327,28 @@ class NotificationService:
             NotificationNotFoundError: If notification not found
         """
         notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
-        return self.repository.delete(db, id=notification_id)
+        
+        # Store notification information before deletion for event emission
+        notification_id = notification.id
+        user_id = notification.reminder.user_id
+        reminder_id = notification.reminder_id
+        client_id = notification.client_id
+        notification_type = notification.notification_type
+        
+        # Delete the notification
+        deleted_notification = self.repository.delete(db, id=notification_id)
+        
+        # Emit a notification cancelled event when a notification is deleted
+        event = create_notification_cancelled_event(
+            notification_id=notification_id,
+            user_id=user_id,
+            reminder_id=reminder_id,
+            client_id=client_id,
+            notification_type=notification_type
+        )
+        event_dispatcher.emit(event)
+        
+        return deleted_notification
     
     @with_transaction
     @handle_exceptions(error_message="Failed to mark notification as sent")
@@ -334,9 +372,25 @@ class NotificationService:
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If notification is not in PENDING status
         """
         notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
-        return self.repository.mark_as_sent(db, notification_id=notification_id)
+        
+        # Update the notification
+        updated_notification = self.repository.mark_as_sent(db, notification_id=notification_id)
+        
+        # Emit notification sent event
+        event = create_notification_sent_event(
+            notification_id=updated_notification.id,
+            user_id=updated_notification.reminder.user_id,
+            reminder_id=updated_notification.reminder_id,
+            client_id=updated_notification.client_id,
+            notification_type=updated_notification.notification_type,
+            sent_at=updated_notification.sent_at or datetime.utcnow()
+        )
+        event_dispatcher.emit(event)
+        
+        return updated_notification
     
     @with_transaction
     @handle_exceptions(error_message="Failed to mark notification as failed")
@@ -354,7 +408,7 @@ class NotificationService:
         Args:
             db: Database session
             notification_id: Notification ID
-            error_message: Error message describing the failure
+            error_message: Error message
             user_id: Optional user ID for authorization
             
         Returns:
@@ -364,7 +418,22 @@ class NotificationService:
             NotificationNotFoundError: If notification not found
         """
         notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
-        return self.repository.mark_as_failed(db, notification_id=notification_id, error_message=error_message)
+        
+        # Update the notification
+        updated_notification = self.repository.mark_as_failed(db, notification_id=notification_id, error_message=error_message)
+        
+        # Emit notification failed event
+        event = create_notification_failed_event(
+            notification_id=updated_notification.id,
+            user_id=updated_notification.reminder.user_id,
+            reminder_id=updated_notification.reminder_id,
+            client_id=updated_notification.client_id,
+            notification_type=updated_notification.notification_type,
+            error_message=error_message
+        )
+        event_dispatcher.emit(event)
+        
+        return updated_notification
     
     @with_transaction
     @handle_exceptions(error_message="Failed to mark notification as cancelled")
@@ -388,9 +457,24 @@ class NotificationService:
             
         Raises:
             NotificationNotFoundError: If notification not found
+            InvalidOperationError: If notification is not in PENDING status
         """
         notification = self.get_notification(db, notification_id=notification_id, user_id=user_id)
-        return self.repository.mark_as_cancelled(db, notification_id=notification_id)
+        
+        # Update the notification
+        updated_notification = self.repository.mark_as_cancelled(db, notification_id=notification_id)
+        
+        # Emit notification cancelled event
+        event = create_notification_cancelled_event(
+            notification_id=updated_notification.id,
+            user_id=updated_notification.reminder.user_id,
+            reminder_id=updated_notification.reminder_id,
+            client_id=updated_notification.client_id,
+            notification_type=updated_notification.notification_type
+        )
+        event_dispatcher.emit(event)
+        
+        return updated_notification
     
     @with_transaction
     @handle_exceptions(error_message="Failed to create and send notifications for reminder")

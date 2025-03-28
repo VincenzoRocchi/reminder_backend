@@ -16,6 +16,14 @@ from app.core.exceptions import (
     UserNotFoundError
 )
 from app.core.error_handling import handle_exceptions, with_transaction
+from app.events.dispatcher import event_dispatcher
+from app.events.definitions.sender_identity_events import (
+    create_sender_identity_created_event,
+    create_sender_identity_updated_event,
+    create_sender_identity_deleted_event,
+    create_sender_identity_verified_event,
+    create_default_sender_identity_set_event
+)
 
 class SenderIdentityService:
     """
@@ -156,7 +164,22 @@ class SenderIdentityService:
         obj_in_data = obj_in.model_dump()
         obj_in_data["user_id"] = user_id
         
-        return self.repository.create(db, obj_in=obj_in_data)
+        # Create the sender identity
+        sender_identity = self.repository.create(db, obj_in=obj_in_data)
+        
+        # Emit event for sender identity creation
+        event = create_sender_identity_created_event(
+            identity_id=sender_identity.id,
+            user_id=sender_identity.user_id,
+            identity_type=sender_identity.identity_type,
+            value=sender_identity.value,
+            display_name=sender_identity.display_name or "",
+            is_verified=sender_identity.is_verified,
+            is_default=sender_identity.is_default
+        )
+        event_dispatcher.emit(event)
+        
+        return sender_identity
     
     @with_transaction
     @handle_exceptions(error_message="Failed to update sender identity")
@@ -206,8 +229,23 @@ class SenderIdentityService:
             if existing_identity and existing_identity.id != sender_identity_id:
                 raise SenderIdentityAlreadyExistsError(
                     f"Sender identity with value '{obj_in.value}' already exists")
+        
+        # Update the sender identity 
+        updated_identity = self.repository.update(db, db_obj=sender_identity, obj_in=obj_in)
+        
+        # Emit event for sender identity update
+        event = create_sender_identity_updated_event(
+            identity_id=updated_identity.id,
+            user_id=updated_identity.user_id,
+            identity_type=updated_identity.identity_type,
+            value=updated_identity.value,
+            display_name=updated_identity.display_name,
+            is_verified=updated_identity.is_verified,
+            is_default=updated_identity.is_default
+        )
+        event_dispatcher.emit(event)
                 
-        return self.repository.update(db, db_obj=sender_identity, obj_in=obj_in)
+        return updated_identity
     
     @with_transaction
     @handle_exceptions(error_message="Failed to delete sender identity")
@@ -233,7 +271,26 @@ class SenderIdentityService:
             SenderIdentityNotFoundError: If sender identity not found
         """
         sender_identity = self.get_sender_identity(db, sender_identity_id=sender_identity_id, user_id=user_id)
-        return self.repository.delete(db, id=sender_identity_id)
+        
+        # Store identity data for event emission before deletion
+        identity_id = sender_identity.id
+        identity_user_id = sender_identity.user_id
+        identity_type = sender_identity.identity_type
+        identity_value = sender_identity.value
+        
+        # Delete the sender identity
+        deleted_identity = self.repository.delete(db, id=sender_identity_id)
+        
+        # Emit event for sender identity deletion
+        event = create_sender_identity_deleted_event(
+            identity_id=identity_id,
+            user_id=identity_user_id,
+            identity_type=identity_type,
+            value=identity_value
+        )
+        event_dispatcher.emit(event)
+        
+        return deleted_identity
     
     @handle_exceptions(error_message="Failed to get default sender identity")
     def get_default_sender_identity(
@@ -291,7 +348,19 @@ class SenderIdentityService:
                 self.repository.update(db, db_obj=identity, obj_in={"is_default": False})
         
         # Set this one as default
-        return self.repository.update(db, db_obj=sender_identity, obj_in={"is_default": True})
+        updated_identity = self.repository.update(db, db_obj=sender_identity, obj_in={"is_default": True})
+        
+        # Emit event for default sender identity set
+        event = create_default_sender_identity_set_event(
+            identity_id=updated_identity.id,
+            user_id=updated_identity.user_id,
+            identity_type=updated_identity.identity_type,
+            value=updated_identity.value,
+            display_name=updated_identity.display_name or ""
+        )
+        event_dispatcher.emit(event)
+        
+        return updated_identity
     
     @with_transaction
     @handle_exceptions(error_message="Failed to verify sender identity")
@@ -328,7 +397,20 @@ class SenderIdentityService:
         if verification_code != "000000":  # Example validation
             raise InvalidConfigurationError("Invalid verification code")
             
-        return self.repository.update(db, db_obj=sender_identity, obj_in={"is_verified": True})
+        # Update and mark as verified
+        updated_identity = self.repository.update(db, db_obj=sender_identity, obj_in={"is_verified": True})
+        
+        # Emit event for sender identity verification
+        event = create_sender_identity_verified_event(
+            identity_id=updated_identity.id,
+            user_id=updated_identity.user_id,
+            identity_type=updated_identity.identity_type,
+            value=updated_identity.value,
+            display_name=updated_identity.display_name or ""
+        )
+        event_dispatcher.emit(event)
+        
+        return updated_identity
 
 # Create singleton instance
 sender_identity_service = SenderIdentityService() 

@@ -5,6 +5,80 @@ from app.repositories.client import client_repository
 from app.schemas.clients import ClientCreate, ClientUpdate, Client, ClientDetail
 from app.core.exceptions import ClientNotFoundError, ClientAlreadyExistsError
 from app.core.error_handling import handle_exceptions, with_transaction
+from app.events.utils import emit_event_safely, with_event_emission
+from app.events.definitions.client_events import (
+    create_client_created_event,
+    create_client_updated_event,
+    create_client_deleted_event
+)
+
+# Event factory functions for decorators
+def make_client_created_event(service, db, client_in, user_id, result):
+    """
+    Create a client created event.
+    
+    Args:
+        service: The service instance
+        db: Database session
+        client_in: Client creation schema
+        user_id: User ID
+        result: Created client (function result)
+        
+    Returns:
+        Event for client created
+    """
+    return create_client_created_event(
+        client_id=result.id,
+        user_id=result.user_id,
+        name=result.name,
+        email=result.email,
+        phone_number=result.phone_number,
+        is_active=result.is_active
+    )
+
+def make_client_updated_event(service, db, client_id, client_in, user_id, result):
+    """
+    Create a client updated event.
+    
+    Args:
+        service: The service instance
+        db: Database session
+        client_id: Client ID
+        client_in: Client update schema
+        user_id: User ID
+        result: Updated client (function result)
+        
+    Returns:
+        Event for client updated
+    """
+    return create_client_updated_event(
+        client_id=result.id,
+        user_id=result.user_id,
+        name=result.name,
+        email=result.email,
+        phone_number=result.phone_number,
+        is_active=result.is_active
+    )
+
+def make_client_deleted_event(service, db, client_id, user_id, result):
+    """
+    Create a client deleted event.
+    
+    Args:
+        service: The service instance
+        db: Database session
+        client_id: Client ID
+        user_id: User ID
+        result: Deleted client (function result)
+        
+    Returns:
+        Event for client deleted
+    """
+    return create_client_deleted_event(
+        client_id=client_id,
+        user_id=user_id,
+        name=result.name
+    )
 
 class ClientService:
     """
@@ -114,6 +188,7 @@ class ClientService:
     
     @with_transaction
     @handle_exceptions(error_message="Failed to create client")
+    @with_event_emission(lambda service, db, client_in, user_id, result: make_client_created_event(service, db, client_in, user_id, result))
     def create_client(self, db: Session, *, client_in: ClientCreate, user_id: int) -> Client:
         """
         Create a new client.
@@ -142,11 +217,15 @@ class ClientService:
         else:
             obj_data = client_in.model_dump()
             obj_data["user_id"] = user_id
-            
-        return self.repository.create(db, obj_in=obj_data)
+        
+        # Create the client    
+        created_client = self.repository.create(db, obj_in=obj_data)
+        
+        return created_client
     
     @with_transaction
     @handle_exceptions(error_message="Failed to update client")
+    @with_event_emission(lambda service, db, client_id, client_in, user_id, result: make_client_updated_event(service, db, client_id, client_in, user_id, result))
     def update_client(
         self, 
         db: Session, 
@@ -178,11 +257,15 @@ class ClientService:
             existing_client = self.repository.get_by_email(db, email=client_in.email, user_id=user_id)
             if existing_client:
                 raise ClientAlreadyExistsError(f"Client with email {client_in.email} already exists")
-                
-        return self.repository.update(db, db_obj=client, obj_in=client_in)
+        
+        # Update the client
+        updated_client = self.repository.update(db, db_obj=client, obj_in=client_in)
+        
+        return updated_client
     
     @with_transaction
     @handle_exceptions(error_message="Failed to delete client")
+    @with_event_emission(lambda service, db, client_id, user_id, result: make_client_deleted_event(service, db, client_id, user_id, result))
     def delete_client(self, db: Session, *, client_id: int, user_id: int) -> Client:
         """
         Delete a client.
@@ -199,7 +282,11 @@ class ClientService:
             ClientNotFoundError: If client not found
         """
         client = self.get_client(db, client_id=client_id, user_id=user_id)
-        return self.repository.delete(db, id=client_id)
+        
+        # Delete the client
+        deleted_client = self.repository.delete(db, id=client_id)
+        
+        return deleted_client
     
     @with_transaction
     @handle_exceptions(error_message="Failed to mark client as active/inactive")
@@ -227,7 +314,11 @@ class ClientService:
             ClientNotFoundError: If client not found
         """
         client = self.get_client(db, client_id=client_id, user_id=user_id)
-        return self.repository.update(db, db_obj=client, obj_in={"is_active": is_active})
+        
+        # Update the client's active status
+        updated_client = self.repository.update(db, db_obj=client, obj_in={"is_active": is_active})
+        
+        return updated_client
     
     def get_active_clients(
         self, 

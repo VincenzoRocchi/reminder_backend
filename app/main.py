@@ -83,6 +83,11 @@ async def startup_event():
     """Initialize services when application starts"""
     logger.info(f"Starting application in {settings.ENV} environment")
     
+    # Set up event system
+    from app.events import setup_event_system
+    event_system = setup_event_system()
+    logger.info("Event system initialized and handlers registered")
+    
     # Run security checks
     from app.core.security_checker import check_security_at_startup
     security_results = check_security_at_startup(settings)

@@ -7,6 +7,12 @@ from app.schemas.user import UserCreate, UserUpdate, User
 from app.core.security import verify_password
 from app.core.exceptions import UserNotFoundError, UserAlreadyExistsError, InvalidCredentialsError
 from app.core.error_handling import handle_exceptions, with_transaction
+from app.events.utils import emit_event_safely, with_event_emission
+from app.events.definitions.user_events import (
+    create_user_created_event,
+    create_user_updated_event,
+    create_user_deleted_event
+)
 
 class UserService:
     """
@@ -101,6 +107,14 @@ class UserService:
     
     @with_transaction
     @handle_exceptions(error_message="Failed to create user")
+    @with_event_emission(lambda service, db, user_in, result: create_user_created_event(
+        user_id=result.id,
+        username=result.username,
+        email=result.email,
+        is_active=result.is_active,
+        is_superuser=result.is_superuser,
+        business_name=result.business_name
+    ))
     def create_user(self, db: Session, *, user_in: UserCreate) -> User:
         """
         Create a new user.
@@ -122,11 +136,22 @@ class UserService:
         # Check if user with same username exists
         if self.repository.get_by_username(db, username=user_in.username):
             raise UserAlreadyExistsError(f"User with username {user_in.username} already exists")
-            
-        return self.repository.create(db, obj_in=user_in)
+        
+        # Create the user
+        created_user = self.repository.create(db, obj_in=user_in)
+        
+        return created_user
     
     @with_transaction
     @handle_exceptions(error_message="Failed to update user")
+    @with_event_emission(lambda service, db, user_id, user_in, result: create_user_updated_event(
+        user_id=result.id,
+        username=result.username,
+        email=result.email,
+        is_active=result.is_active,
+        is_superuser=result.is_superuser,
+        business_name=result.business_name
+    ))
     def update_user(self, db: Session, *, user_id: int, user_in: UserUpdate) -> User:
         """
         Update an existing user.
@@ -145,11 +170,19 @@ class UserService:
         user = self.repository.get(db, id=user_id)
         if not user:
             raise UserNotFoundError(f"User with ID {user_id} not found")
-            
-        return self.repository.update(db, db_obj=user, obj_in=user_in)
+        
+        # Update the user
+        updated_user = self.repository.update(db, db_obj=user, obj_in=user_in)
+        
+        return updated_user
     
     @with_transaction
     @handle_exceptions(error_message="Failed to delete user")
+    @with_event_emission(lambda service, db, user_id, result: create_user_deleted_event(
+        user_id=user_id,
+        username=result.username,
+        email=result.email
+    ))
     def delete_user(self, db: Session, *, user_id: int) -> User:
         """
         Delete a user.
@@ -167,8 +200,11 @@ class UserService:
         user = self.repository.get(db, id=user_id)
         if not user:
             raise UserNotFoundError(f"User with ID {user_id} not found")
-            
-        return self.repository.delete(db, id=user_id)
+        
+        # Delete the user
+        deleted_user = self.repository.delete(db, id=user_id)
+        
+        return deleted_user
     
     @handle_exceptions(error_message="Failed to get all users")
     def get_users(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[User]:

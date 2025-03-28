@@ -1,6 +1,15 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import emailConfigurations, users, clients, reminders, notifications, auth, senderIdentities
+from app.api.endpoints import (
+    emailConfigurations, 
+    users, 
+    clients, 
+    reminders, 
+    notifications, 
+    auth, 
+    senderIdentities,
+    monitoring
+)
 
 # Main API router
 api_router = APIRouter()
@@ -14,3 +23,4 @@ api_router.include_router(reminders.router, prefix="/reminders", tags=["reminder
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(senderIdentities.router, prefix="/sender-identities", tags=["sender-identities"])
 api_router.include_router(emailConfigurations.router, prefix="/email-configurations", tags=["email-configurations"])
+api_router.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
