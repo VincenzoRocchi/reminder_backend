@@ -68,15 +68,15 @@ I tuoi file attuali rappresentano una solida base di partenza. Le modifiche in p
 
 - Configura `REDIS_URL` nelle impostazioni dell'ambiente.
 
-#### 7. Registrazione degli Errori
+#### 7. Error Logging
 
-- Imposta `LOG_LEVEL=INFO` per la produzione (evita il livello DEBUG in produzione).
-- Configura il corretto inoltro dei log alla tua soluzione di monitoraggio.
-- Assicurati che i dati sensibili non vengano registrati.
+- Set `LOG_LEVEL=INFO` for production (avoid DEBUG level in production).
+- Configure proper logging forwarding to your monitoring solution.
+- Ensure sensitive data is not logged.
 
-## Archiviazione
+## Storage
 
-### Configurazione del Sistema di Archiviazione
+### Storage System Configuration
 
-- Imposta `STORAGE_TYPE=s3` per l'archiviazione su AWS S3.
-- Configura tutte le credenziali e le impostazioni necessarie per S3.
+- Set `STORAGE_TYPE=s3` for AWS S3 storage.
+- Configure all necessary credentials and settings for S3.

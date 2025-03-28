@@ -1,34 +1,34 @@
 # ----------------------------------------------------------------------
-# NOTE PER LA PRODUZIONE:
+# PRODUCTION NOTES:
 #
-# 1. Gestione delle Chiavi e del Salt:
-#    - Assicurati che SECRET_KEY in settings sia sufficientemente lungo e complesso.
-#    - Verifica che il valore di ENCRYPTION_SALT (se impostato tramite variabile d'ambiente)
-#      venga gestito in modo sicuro e costante tra i deployment.
+# 1. Key and Salt Management:
+#    - Ensure SECRET_KEY in settings is sufficiently long and complex.
+#    - Verify that the ENCRYPTION_SALT value (if set via environment variable)
+#      is managed securely and consistently across deployments.
 #
-# 2. Algoritmi e Parametri di Derivazione:
-#    - I parametri usati (es. iterazioni in PBKDF2HMAC) sono adeguati per l'ambiente di produzione;
-#      valuta di aumentare il numero di iterazioni se il carico di CPU lo permette.
+# 2. Algorithms and Derivation Parameters:
+#    - The parameters used (e.g., iterations in PBKDF2HMAC) are adequate for the production environment;
+#      consider increasing the number of iterations if the CPU load allows it.
 #
 # 3. Logging:
-#    - In produzione, imposta un livello di logging adeguato (ad es. WARNING o ERROR) per non
-#      esporre informazioni sensibili o generare log troppo verbosi.
+#    - In production, set an appropriate logging level (e.g., WARNING or ERROR) to avoid
+#      exposing sensitive information or generating overly verbose logs.
 #
-# 4. Sicurezza Generale:
-#    - Verifica che l'uso dei meccanismi di cifratura (Fernet per stringhe, AES per bytes) sia
-#      conforme ai requisiti di sicurezza dell'applicazione.
-#    - Assicurati che le chiavi generate non siano mai hard-coded e vengano fornite tramite un
-#      sistema di secret management o variabili d'ambiente sicure.
+# 4. General Security:
+#    - Verify that the use of encryption mechanisms (Fernet for strings, AES for bytes) is
+#      compliant with the application's security requirements.
+#    - Ensure that generated keys are never hard-coded and are provided through a
+#      secure secret management system or secure environment variables.
 #
-# 5. Integrazione con Pydantic:
-#    - Se utilizzi il metodo create_encrypted_model per modelli Pydantic, verifica che la logica
-#      di validazione e decrittazione funzioni correttamente in tutti i casi d'uso in produzione.
+# 5. Pydantic Integration:
+#    - If you're using the create_encrypted_model method for Pydantic models, verify that the validation
+#      and decryption logic works correctly in all production use cases.
 #
-# In sintesi, in produzione dovrai:
-#    - Utilizzare una chiave segreta robusta e un salt costante e sicuro.
-#    - Valutare i parametri di derivazione delle chiavi per garantire la sicurezza senza compromettere
-#      le prestazioni.
-#    - Configurare il logging in modo che non vengano esposte informazioni sensibili.
+# In summary, in production you will need to:
+#    - Use a robust secret key and a consistent, secure salt.
+#    - Evaluate key derivation parameters to ensure security without compromising
+#      performance.
+#    - Configure logging so that sensitive information is not exposed.
 
 import base64
 import os

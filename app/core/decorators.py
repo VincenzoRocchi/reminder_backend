@@ -7,13 +7,13 @@ logger = logging.getLogger(__name__)
 
 def validation_aware(validation_type: str = 'all'):
     """
-    Decoratore che gestisce la logica di bypass delle validazioni in base alle impostazioni dell'ambiente.
+    Decorator that handles validation bypass logic based on environment settings.
     
     Args:
-        validation_type: Tipo di validazione che questa funzione esegue
+        validation_type: Type of validation this function performs
         
     Returns:
-        Funzione decorata che rispetta le impostazioni di validazione
+        Decorated function that respects validation settings
     """
     def decorator(func):
         @functools.wraps(func)
@@ -21,21 +21,21 @@ def validation_aware(validation_type: str = 'all'):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                # Se non siamo in modalità di validazione rigorosa e questo è un errore di validazione
+                # If we're not in strict validation mode and this is a validation error
                 if (not settings.should_validate(validation_type) and 
                     (isinstance(e, InvalidConfigurationError) or 
                      isinstance(e, ValueError) and "validation" in str(e).lower())):
                     
-                    # Registra la validazione bypassata
+                    # Log the bypassed validation
                     logger.warning(
-                        f"Validazione bypassata: {str(e)} | Funzione: {func.__name__} | "
+                        f"Validation bypassed: {str(e)} | Function: {func.__name__} | "
                         f"STRICT_VALIDATION={settings.STRICT_VALIDATION}"
                     )
                     
-                    # Per funzioni che modificano argomenti, potrebbe essere necessario restituire un valore di fallback
+                    # For functions that modify arguments, it might be necessary to return a fallback value
                     return kwargs.get('value', None)
                 
-                # Rilancia altre eccezioni o se la validazione rigorosa è abilitata
+                # Re-raise other exceptions or if strict validation is enabled
                 raise
         return wrapper
     return decorator
