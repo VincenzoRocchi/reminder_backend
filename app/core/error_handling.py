@@ -1,8 +1,10 @@
 import logging
 from functools import wraps
 from typing import Any, Callable, TypeVar, cast
+import uuid
 
 from app.core.exceptions import AppException, DatabaseError
+from app.events.utils import transactional_events
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +59,11 @@ def handle_exceptions(
 
 def with_transaction(func: F) -> F:
     """
-    A decorator to handle database transactions and rollbacks.
+    A decorator to handle database transactions and event-driven operations.
     
     This decorator wraps the function in a try/except block and performs
-    rollback in case of exceptions.
+    rollback in case of exceptions. It also integrates with the event system
+    to ensure events are only emitted after successful transactions.
     
     Args:
         func: Function to decorate
@@ -91,12 +94,26 @@ def with_transaction(func: F) -> F:
             # If we can't find db, just call the function normally
             return func(*args, **kwargs)
             
-        try:
-            result = func(*args, **kwargs)
-            return result
-        except Exception as e:
-            # Roll back the transaction if an exception occurs
-            if db and hasattr(db, 'rollback'):
-                db.rollback()
-            raise
+        # Generate a unique transaction ID
+        transaction_id = str(uuid.uuid4())
+        
+        # Use the event transaction manager context
+        with transactional_events(transaction_id):
+            try:
+                # Add transaction_id to kwargs so it can be used by event emitters
+                kwargs['_transaction_id'] = transaction_id
+                result = func(*args, **kwargs)
+                
+                # If the function didn't explicitly commit, do it now
+                if hasattr(db, 'commit') and not getattr(db, '_in_transaction', False):
+                    db.commit()
+                    
+                return result
+            except Exception as e:
+                # Roll back the transaction if an exception occurs
+                if db and hasattr(db, 'rollback'):
+                    db.rollback()
+                    
+                # The context manager will handle discarding events
+                raise
     return cast(F, wrapper) 

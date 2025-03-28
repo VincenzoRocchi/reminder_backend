@@ -11,33 +11,78 @@ from .client_events import *
 from .sender_identity_events import *
 from .user_events import *
 
+# Map of event types to their respective classes for dynamic loading
+EVENT_TYPES = {
+    # Client events
+    "client.created": ClientCreatedEvent,
+    "client.updated": ClientUpdatedEvent,
+    "client.deleted": ClientDeletedEvent,
+    "client.added_to_reminder": ClientAddedToReminderEvent,
+    "client.removed_from_reminder": ClientRemovedFromReminderEvent,
+    
+    # Reminder events
+    "reminder.created": ReminderCreatedEvent,
+    "reminder.updated": ReminderUpdatedEvent,
+    "reminder.deleted": ReminderDeletedEvent,
+    "reminder.due_soon": ReminderDueSoonEvent,
+    "reminder.overdue": ReminderOverdueEvent,
+    
+    # Notification events
+    "notification.created": NotificationCreatedEvent,
+    "notification.sent": NotificationSentEvent,
+    "notification.delivered": NotificationDeliveredEvent,
+    "notification.failed": NotificationFailedEvent,
+    
+    # Sender identity events
+    "sender_identity.created": SenderIdentityCreatedEvent,
+    "sender_identity.updated": SenderIdentityUpdatedEvent,
+    "sender_identity.deleted": SenderIdentityDeletedEvent,
+    "sender_identity.verified": SenderIdentityVerifiedEvent,
+    "sender_identity.rejected": SenderIdentityRejectedEvent,
+    
+    # User events
+    "user.created": UserCreatedEvent,
+    "user.updated": UserUpdatedEvent,
+    "user.deleted": UserDeletedEvent,
+    "user.logged_in": UserLoggedInEvent,
+    "user.logged_out": UserLoggedOutEvent
+}
+
 __all__ = [
     # Reminder events
     "ReminderCreatedEvent",
     "ReminderUpdatedEvent",
     "ReminderDeletedEvent",
-    "ReminderDueEvent",
+    "ReminderDueSoonEvent",
+    "ReminderOverdueEvent",
     
     # Notification events
-    "NotificationScheduledEvent",
+    "NotificationCreatedEvent",
     "NotificationSentEvent",
+    "NotificationDeliveredEvent",
     "NotificationFailedEvent",
-    "NotificationCancelledEvent",
     
     # Client events
+    "ClientCreatedEvent",
+    "ClientUpdatedEvent",
+    "ClientDeletedEvent",
     "ClientAddedToReminderEvent",
     "ClientRemovedFromReminderEvent",
     
     # Sender identity events
     "SenderIdentityCreatedEvent",
     "SenderIdentityUpdatedEvent",
-    "SenderIdentityDeletedEvent", 
+    "SenderIdentityDeletedEvent",
     "SenderIdentityVerifiedEvent",
-    "DefaultSenderIdentitySetEvent",
+    "SenderIdentityRejectedEvent",
 
     # User events
-    "UserData",
     "UserCreatedEvent",
     "UserUpdatedEvent",
     "UserDeletedEvent",
+    "UserLoggedInEvent",
+    "UserLoggedOutEvent",
+
+    # Event type mapping
+    "EVENT_TYPES"
 ] 

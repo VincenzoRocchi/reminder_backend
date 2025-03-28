@@ -8,7 +8,8 @@ including safe event emission and background processing.
 import asyncio
 import logging
 from functools import wraps
-from typing import Callable, Any, Optional, TypeVar
+from typing import Callable, Any, Optional, TypeVar, List, ContextManager
+from contextlib import contextmanager
 
 from app.events.base import Event
 from app.events.dispatcher import event_dispatcher
@@ -17,6 +18,101 @@ from app.events.exceptions import EventDispatchError
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
+
+class EventTransactionManager:
+    """
+    Manages events in the context of database transactions.
+    
+    This class ensures that events are only emitted after a successful
+    database transaction, preventing events from being emitted when
+    the transaction is rolled back.
+    """
+    
+    def __init__(self):
+        self._event_store = {}  # Maps transaction IDs to lists of events
+        
+    def queue_event(self, transaction_id: str, event: Event) -> None:
+        """
+        Queue an event to be emitted after the transaction commits.
+        
+        Args:
+            transaction_id: The ID of the transaction
+            event: The event to queue
+        """
+        if transaction_id not in self._event_store:
+            self._event_store[transaction_id] = []
+        self._event_store[transaction_id].append(event)
+        logger.debug(f"Event of type {event.event_type} queued for transaction {transaction_id}")
+        
+    def emit_events(self, transaction_id: str) -> None:
+        """
+        Emit all events queued for a transaction.
+        
+        Args:
+            transaction_id: The ID of the transaction
+        """
+        if transaction_id not in self._event_store:
+            return
+            
+        events = self._event_store.pop(transaction_id)
+        for event in events:
+            try:
+                event_dispatcher.emit(event)
+                logger.debug(f"Event of type {event.event_type} emitted after transaction {transaction_id}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to emit event of type {event.event_type} after transaction {transaction_id}: {str(e)}",
+                    exc_info=True
+                )
+                
+    def discard_events(self, transaction_id: str) -> None:
+        """
+        Discard all events queued for a transaction.
+        
+        This should be called when a transaction is rolled back.
+        
+        Args:
+            transaction_id: The ID of the transaction
+        """
+        if transaction_id in self._event_store:
+            events = self._event_store.pop(transaction_id)
+            logger.debug(f"Discarded {len(events)} events for transaction {transaction_id}")
+
+# Global instance of the event transaction manager
+event_transaction_manager = EventTransactionManager()
+
+@contextmanager
+def transactional_events(transaction_id: str) -> ContextManager[None]:
+    """
+    Context manager for handling events in a transaction.
+    
+    Events queued during the transaction will only be emitted if the
+    transaction completes successfully (no exceptions are raised).
+    
+    Args:
+        transaction_id: The ID of the transaction
+        
+    Yields:
+        None
+    """
+    try:
+        yield
+        # If we get here, the transaction was successful
+        event_transaction_manager.emit_events(transaction_id)
+    except Exception as e:
+        # If an exception occurs, discard the events
+        event_transaction_manager.discard_events(transaction_id)
+        raise  # Re-raise the exception
+
+def queue_event(transaction_id: str, event: Event) -> None:
+    """
+    Queue an event to be emitted after a transaction commits.
+    
+    Args:
+        transaction_id: The ID of the transaction
+        event: The event to queue
+    """
+    event_transaction_manager.queue_event(transaction_id, event)
 
 def emit_event_safely(event: Event) -> None:
     """

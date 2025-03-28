@@ -43,6 +43,26 @@ class EventHandlerError(EventException):
             details=details
         )
 
+class EventRetryError(EventException):
+    """Raised when an event handler retry fails."""
+    def __init__(
+        self, 
+        event_type: str, 
+        handler_name: str, 
+        retry_count: int, 
+        max_retries: int, 
+        message: str = None, 
+        details: str = None
+    ):
+        error_message = message or f"Failed to process event type '{event_type}' in handler '{handler_name}' after {retry_count} retries"
+        super().__init__(
+            message=error_message,
+            error_code="EVENT_RETRY_ERROR",
+            details=details
+        )
+        self.retry_count = retry_count
+        self.max_retries = max_retries
+
 class EventValidationError(EventException):
     """Raised when an event fails validation."""
     def __init__(self, event_type: str, message: str = None, details: str = None):
