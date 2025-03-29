@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from typing import Annotated
 
 from app.core.rate_limiter import rate_limit_login
 from app.api.dependencies import get_current_user, oauth2_scheme
@@ -17,18 +18,30 @@ from app.core.exceptions import (
 )
 from app.core.token_blacklist import token_blacklist
 from app.database import get_db_session as get_db
-from app.schemas.token import Token
+from app.schemas.token import Token, TokenRefresh
 from app.schemas.user import User
 from app.models.users import User as UserModel
 
 router = APIRouter()
 
 @router.post("/login", response_model=Token, dependencies=[Depends(rate_limit_login)])
-def login_access_token(
-    db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()
+async def login(
+    db: Annotated[Session, Depends(get_db)], 
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ):
     """
-    OAuth2 compatible token login, get an access token for future requests
+    Log in with username and password to get access and refresh tokens.
+    
+    This endpoint implements OAuth2 password flow compatible with standard OAuth clients.
+    
+    On successful authentication:
+    - Returns an access token (short-lived, typically 30 minutes)
+    - Returns a refresh token (longer-lived, typically 7 days) 
+    - Both tokens are JWT format
+    
+    Notes:
+    - Username can be either the user's username or email address
+    - Rate limiting is applied to prevent brute force attacks
     """
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -51,12 +64,22 @@ def login_access_token(
     }
 
 
-@router.post("/logout")
-def logout(
-    token: str = Depends(oauth2_scheme),
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    token: Annotated[str, Depends(oauth2_scheme)]
 ):
     """
-    Logout by blacklisting the current token
+    Log out by invalidating the current access token.
+    
+    This endpoint:
+    - Extracts the token's unique identifier (jti) and expiration time
+    - Adds the token to a blacklist until its original expiration time
+    - Future requests with this token will be rejected
+    
+    Notes:
+    - Requires a valid access token in the Authorization header
+    - The token blacklist is temporary and cleaned up periodically
+    - For complete security, clients should also discard the refresh token
     """
     try:
         payload = jwt.decode(
@@ -75,12 +98,28 @@ def logout(
 
 
 @router.post("/refresh", response_model=Token)
-def refresh_token(
-    db: Session = Depends(get_db), refresh_token: str = Body(...)
+async def refresh(
+    db: Annotated[Session, Depends(get_db)], 
+    refresh_token_data: Annotated[TokenRefresh, Body(...)]
 ):
     """
-    Get a new access token using refresh token
+    Get a new access token using a refresh token.
+    
+    This endpoint:
+    - Validates the provided refresh token
+    - Issues a new access token if the refresh token is valid
+    - Returns the same refresh token for continued use
+    
+    Required fields:
+    - refresh_token: The refresh token obtained during login
+    
+    Notes:
+    - Use this endpoint when your access token has expired
+    - The refresh token has a longer lifetime than access tokens
+    - If the refresh token is invalid or expired, you must log in again
     """
+    refresh_token = refresh_token_data.refresh_token
+    
     try:
         payload = jwt.decode(
             refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
@@ -112,19 +151,46 @@ def refresh_token(
 
 
 @router.get("/me", response_model=User)
-def read_users_me(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(
+    current_user: Annotated[User, Depends(get_current_user)]
+):
     """
-    Get current user information
+    Get information about the currently authenticated user.
+    
+    This endpoint:
+    - Retrieves the user profile associated with the access token
+    - Returns user details like ID, username, email, etc.
+    
+    Notes:
+    - Requires a valid access token in the Authorization header
+    - The token's subject (sub) claim is used to identify the user
+    - Useful for frontend applications to get the logged-in user's details
     """
     return current_user
 
 
-@router.post("/verify-token")
-def verify_token(
-    token: str = Body(...),
+@router.post("/verify-token", status_code=status.HTTP_200_OK)
+async def verify_token(
+    token: Annotated[str, Body(..., embed=True)]
 ):
     """
-    Verify if a token is valid and not blacklisted
+    Verify if a JWT token is valid and not blacklisted.
+    
+    This endpoint:
+    - Decodes and validates the token's signature
+    - Checks if the token is in the blacklist
+    - Returns the token's validity and associated user ID
+    
+    Required fields:
+    - token: The JWT token to verify
+    
+    Returns:
+    - valid: Boolean indicating if the token is valid
+    - user_id: The user ID extracted from the token (if valid)
+    
+    Notes:
+    - Useful for services to verify tokens without needing to implement JWT validation
+    - Can be used by API gateways or middleware for token validation
     """
     try:
         payload = jwt.decode(

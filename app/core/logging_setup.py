@@ -117,7 +117,7 @@ def setup_logging() -> None:
             },
             "sqlalchemy.engine": {
                 "handlers": ["console"],
-                "level": logging.WARNING,
+                "level": logging.ERROR,
                 "propagate": False,
             },
         },

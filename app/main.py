@@ -253,6 +253,16 @@ async def shutdown_event():
     """Shutdown services gracefully when application stops"""
     # Import here to avoid circular imports
     from app.services.scheduler_service import scheduler_service
-    if hasattr(scheduler_service.scheduler, 'shutdown'):
-        scheduler_service.scheduler.shutdown()
-        logger.info("Scheduler service shut down")
+    
+    try:
+        if (hasattr(scheduler_service, 'scheduler') and 
+            scheduler_service.scheduler and 
+            hasattr(scheduler_service.scheduler, 'running') and 
+            scheduler_service.scheduler.running):
+            
+            logger.info("Attempting to shut down scheduler service...")
+            scheduler_service.scheduler.shutdown(wait=False)  # Don't wait since the event loop may be closing
+            logger.info("Scheduler service shutdown initiated")
+    except Exception as e:
+        logger.warning(f"Error during scheduler shutdown: {str(e)}")
+        # Continue with application shutdown even if scheduler shutdown fails

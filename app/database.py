@@ -31,19 +31,23 @@ def get_engine(settings: BaseAppSettings):
             if settings.ENV != "development":
                 database_url += "?ssl=true"
 
+    # Only enable SQL echo if explicitly set by environment variable and in development mode
+    # This helps prevent SQL query logging in production for security reasons
+    enable_echo = settings.SQL_ECHO and settings.ENV == "development"
+    
     # Configure engine based on database type
     if settings.DB_ENGINE == 'sqlite':
         # SQLite-specific configuration
         engine = create_engine(
             database_url,
-            echo=settings.SQL_ECHO,
+            echo=enable_echo,
             connect_args={"check_same_thread": False}  # Allows SQLite to be used with multiple threads
         )
     else:
         # Configuration for other databases (MySQL, PostgreSQL, etc.)
         engine = create_engine(
             database_url,
-            echo=settings.SQL_ECHO,
+            echo=enable_echo,
             poolclass=QueuePool,
             pool_size=settings.DB_POOL_SIZE,
             max_overflow=settings.DB_MAX_OVERFLOW,
