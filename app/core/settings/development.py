@@ -31,17 +31,9 @@ class DevelopmentSettings(BaseAppSettings):
     # Note that validation is now always enforced across all environments
     # No special handling for development environment
     
-    # Validate that we're using DEBUG or INFO log level in development
-    @field_validator('LOG_LEVEL')
-    def validate_log_level(cls, v):
-        if v.upper() not in ["DEBUG", "INFO"]:
-            raise InvalidConfigurationError(
-                code="INVALID_LOG_LEVEL",
-                message="LOG_LEVEL should be set to DEBUG or INFO in development environment. "
-                "For a better development experience, DEBUG is recommended. "
-                "For other log levels, use the testing environment by setting ENV=testing."
-            )
-        return v
+    # =======================================================================
+    # DATABASE VALIDATORS
+    # =======================================================================
     
     # Validate that we're using a real database in development
     @field_validator('DB_ENGINE')
@@ -65,6 +57,10 @@ class DevelopmentSettings(BaseAppSettings):
             )
         return v
     
+    # =======================================================================
+    # EVENT STORE VALIDATORS
+    # =======================================================================
+    
     # Validate event store settings in development
     @field_validator('EVENT_STORE_URL')
     def validate_event_store_url(cls, v):
@@ -74,5 +70,21 @@ class DevelopmentSettings(BaseAppSettings):
                 code="INVALID_EVENT_DB_ENGINE",
                 message="Development must use a proper database engine for events (mysql+pymysql, postgresql), not SQLite. "
                 "SQLite is only for testing environment."
+            )
+        return v
+    
+    # =======================================================================
+    # LOGGING VALIDATORS
+    # =======================================================================
+    
+    # Validate that we're using DEBUG or INFO log level in development
+    @field_validator('LOG_LEVEL')
+    def validate_log_level(cls, v):
+        if v.upper() not in ["DEBUG", "INFO"]:
+            raise InvalidConfigurationError(
+                code="INVALID_LOG_LEVEL",
+                message="LOG_LEVEL should be set to DEBUG or INFO in development environment. "
+                "For a better development experience, DEBUG is recommended. "
+                "For other log levels, use the testing environment by setting ENV=testing."
             )
         return v 

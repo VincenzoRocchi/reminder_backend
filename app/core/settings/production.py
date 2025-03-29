@@ -7,6 +7,10 @@ from app.core.exceptions import InvalidConfigurationError, SecurityException
 logger = logging.getLogger(__name__)
 
 class ProductionSettings(BaseAppSettings):
+    # =======================================================================
+    # SECURITY VALIDATORS
+    # =======================================================================
+    
     # Validate that we're using strict validation in production
     @field_validator('STRICT_VALIDATION')
     def validate_strict_validation(cls, v):
@@ -19,7 +23,7 @@ class ProductionSettings(BaseAppSettings):
             )
         return v
     
-    # add extra validators for production (cookies)
+    # Validate cookie security settings
     @field_validator('SECURE_COOKIES')
     def validate_secure_cookies(cls, v):
         if not v:
@@ -47,6 +51,10 @@ class ProductionSettings(BaseAppSettings):
             )
         
         return v
+    
+    # =======================================================================
+    # DATABASE VALIDATORS
+    # =======================================================================
     
     # Add extra validators for production (db host)
     @field_validator('DB_HOST')
@@ -88,6 +96,10 @@ class ProductionSettings(BaseAppSettings):
         
         return v
     
+    # =======================================================================
+    # EVENT STORE VALIDATORS
+    # =======================================================================
+    
     # Validate event store settings in production
     @field_validator('EVENT_STORE_URL')
     def validate_event_store_url(cls, v):
@@ -116,6 +128,10 @@ class ProductionSettings(BaseAppSettings):
             
         return v
     
+    # =======================================================================
+    # EXTERNAL SERVICES VALIDATORS
+    # =======================================================================
+    
     # Twilio credentials validation
     @field_validator('TWILIO_ACCOUNT_SID')
     def validate_twilio_sid(cls, v):
@@ -139,6 +155,10 @@ class ProductionSettings(BaseAppSettings):
             )
         return v
     
+    # =======================================================================
+    # PERFORMANCE & MONITORING VALIDATORS
+    # =======================================================================
+    
     # Redis validation for production
     @field_validator('USE_REDIS')
     def validate_redis_usage(cls, v):
@@ -151,6 +171,9 @@ class ProductionSettings(BaseAppSettings):
             )
         return v
     
+    # =======================================================================
+    # TOKEN EXPIRATION VALIDATORS (TODO)
+    # =======================================================================
     
     # TODO: Add extra validators for production (token expiration) 
     
