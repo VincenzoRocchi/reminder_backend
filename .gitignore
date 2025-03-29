@@ -17,6 +17,7 @@ pyproject.toml
 *.db
 secrets/
 admin_credentials.txt
+scripts/admin_setup.py
 
 # Virtual environments
 .venv

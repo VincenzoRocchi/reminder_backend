@@ -12,77 +12,87 @@ A comprehensive backend system for businesses (such as accounting firms) to mana
 - **Payment Integration**: Include payment links (Stripe) in reminders for easy client transactions
 - **Dashboard & Analytics**: Monitor notification history and payment status
 - **Error Handling**: Robust error handling for notification delivery and payment processing
+- **Event-Driven Architecture**: Centralized event system for tracking and monitoring application events
 
 ## Technology Stack
 
 | Component | Technology |
 |-----------|------------|
-| **Backend API** | FastAPI (Python) |
-| **Database** | AWS RDS (MySQL) |
-| **ORM** | SQLAlchemy |
-| **Migrations** | Manual |
-| **Notifications** | SMTP (Email), Twilio (SMS), WhatsApp Business API |
+| **Backend API** | FastAPI (Python 3.11+) |
+| **Database** | SQL Databases (MySQL/PostgreSQL/SQLite) via SQLAlchemy |
+| **ORM** | SQLAlchemy 2.0+ |
+| **Migrations** | Alembic |
+| **Notifications** | SMTP (Email), Twilio (SMS), WhatsApp API |
 | **Payment Processing** | Stripe API |
-| **Deployment** | Docker + AWS EC2/ECS |
-| **Load Balancing** | AWS Application Load Balancer |
+| **Deployment** | AWS Elastic Beanstalk, Docker |
 | **Task Scheduling** | APScheduler (integrated in application) |
-| **Authentication** | JWT (OAuth2) |
-| **API Documentation** | Swagger/OpenAPI |
-| **Testing** | Pytest |
+| **Caching** | Redis |
+| **Authentication** | JWT (OAuth2) with Passlib & JOSE |
+| **API Documentation** | Swagger/OpenAPI (built-in with FastAPI) |
+| **Testing** | Pytest, pytest-asyncio |
+| **Configuration** | Environment-based with python-dotenv |
 
 ## Project Structure
 
 ```bash
 reminder_backend/
 ├── README.md                  # Project documentation
-├── requirements.txt           # Python dependencies
-├── env/                       # Environment configuration directory
-│   ├── .env.example           # Example environment variables
-│   ├── .env.development       # Development environment variables
-│   ├── .env.testing           # Testing environment variables
-│   ├── .env.production        # Production environment variables
-│   └── README.md              # Environment setup instructions
-├── docker-compose.yml         # Docker Compose configuration
-├── Dockerfile                 # Docker configuration
+├── requirements.txt           # Python dependencies 
+├── pyproject.toml             # Modern Python project configuration
 ├── main.py                    # Application entry point
-├── alembic/                   # Database migrations
+├── Procfile                   # Process file for AWS Elastic Beanstalk
 ├── app/                       # Main application package
+│   ├── main.py                # FastAPI application initialization
+│   ├── database.py            # Database connection and session management
+│   ├── __init__.py            # Package initialization with version
 │   ├── api/                   # API endpoints
 │   │   ├── endpoints/         # Route handlers by resource
 │   │   ├── dependencies.py    # API dependencies (auth, etc.)
 │   │   └── routes.py          # API router configuration
 │   ├── core/                  # Core functionality
 │   │   ├── security/          # Authentication & authorization
-│   │   ├── encryption.py      # Data encryption utilities
-│   │   ├── exceptions.py      # Custom exception types
-│   │   └── settings/          # Environment-based configuration
+│   │   ├── middleware/        # Custom middleware components
+│   │   ├── exception_handlers.py # Global exception handlers
+│   │   ├── security_checker.py # Security validation at startup
+│   │   ├── logging_setup.py   # Logging configuration
+│   │   └── settings.py        # Environment-based configuration
+│   ├── events/                # Event-driven components
+│   │   ├── persistence.py     # Event storage
+│   │   ├── monitoring.py      # Event monitoring endpoints
+│   │   └── __init__.py        # Event system setup
 │   ├── models/                # SQLAlchemy ORM models
 │   │   ├── users.py           # User models
 │   │   ├── clients.py         # Client models
 │   │   ├── reminders.py       # Reminder models
-│   │   ├── notifications.py   # Notification models
 │   │   └── ...                # Other data models
 │   ├── repositories/          # Data access layer
 │   │   ├── user.py            # User data operations
 │   │   ├── client.py          # Client data operations
-│   │   ├── reminder.py        # Reminder data operations
 │   │   └── ...                # Other data repositories
 │   ├── schemas/               # Pydantic schemas for validation
 │   │   ├── users.py           # User schemas
 │   │   ├── clients.py         # Client schemas
-│   │   ├── reminders.py       # Reminder schemas
 │   │   └── ...                # Other schemas
-│   ├── services/              # Business logic & external integrations
-│   │   ├── user.py            # User service
-│   │   ├── client.py          # Client service
-│   │   ├── reminder.py        # Reminder service
-│   │   ├── email_service.py   # Email notification service
-│   │   ├── sms_service.py     # SMS notification service
-│   │   ├── whatsapp_service.py # WhatsApp notification service
-│   │   └── scheduler_service.py # APScheduler integration for reminders
-│   └── database.py            # Database connection and session management
+│   └── services/              # Business logic & external integrations
+│       ├── user.py            # User service
+│       ├── client.py          # Client service
+│       ├── reminder.py        # Reminder service
+│       ├── senderIdentity.py  # Sender identity management
+│       ├── notification.py    # Notification orchestration
+│       ├── email_service.py   # Email notification service
+│       ├── twilio_service.py  # SMS notification via Twilio
+│       ├── scheduler_service.py # Background task scheduling
+│       └── auth_service.py    # Authentication service
+├── env/                       # Environment configuration directory
+│   ├── .env.example           # Example environment variables
+│   └── README.md              # Environment setup instructions
 ├── scripts/                   # Utility scripts
-└── tests/                     # Test suite
+│   └── admin_setup.example.py # Template for admin configuration
+├── .elasticbeanstalk/         # AWS Elastic Beanstalk configuration
+├── .ebextensions/             # AWS EB deployment configurations
+├── logs/                      # Application logs directory
+├── docs/                      # Extended documentation
+└── wf_diagrams/               # Workflow and architecture diagrams
 ```
 
 ## Architecture
@@ -93,7 +103,7 @@ The application follows a layered architecture with clear separation of concerns
 
 - **Endpoints**: Handle HTTP requests and responses
 - **Dependencies**: Shared components like authentication
-- **Routes**: API routing configuration
+- **Routes**: API routing configuration 
 
 ### Service Layer
 
@@ -113,48 +123,36 @@ The application follows a layered architecture with clear separation of concerns
 - **Schemas**: Pydantic models for validation and serialization
 - **Domain Objects**: Business entities and relationships
 
+### Event System
+
+- **Event Tracking**: Records system events
+- **Event Persistence**: Stores events for traceability
+- **Monitoring**: Admin endpoints for event analysis
+
 ### Core Components
 
 - **Settings**: Environment-specific configuration
 - **Security**: Authentication, authorization, and encryption
-- **Exceptions**: Custom exception types and handling
-
-This architecture provides several benefits:
-
-- **Testability**: Each layer can be tested in isolation
-- **Maintainability**: Clear separation of concerns
-- **Scalability**: Modular design allows for easier scaling
-- **Security**: Centralized security controls and validation
+- **Middleware**: Custom request processing
+- **Exception Handlers**: Centralized error handling
 
 ## Deployment Architecture
 
-The Reminder App is designed to be deployed as a centralized service that can manage multiple businesses and their clients. The deployment architecture includes:
+The Reminder App is designed for deployment on AWS Elastic Beanstalk with the following components:
 
-- **App Server**: AWS EC2 or ECS for hosting the FastAPI application
-- **Database**: AWS RDS MySQL for data persistence
-- **Load Balancing**: AWS Application Load Balancer (for scaling)
-- **Monitoring**: AWS CloudWatch for logs and metrics
-- **Networking**: VPC configuration for security
+- **App Server**: Elastic Beanstalk with auto-scaling capabilities
+- **Database**: SQL database (MySQL in production via RDS)
+- **Caching**: Redis for improved performance
+- **Load Balancing**: Application Load Balancer
+- **Monitoring**: CloudWatch for logs and metrics
+- **Security**: WAF, Security Groups, and IAM roles
 
-Each business using the platform (such as accounting firms) will have their own account within the application but will use the same centralized infrastructure.
+For high-availability deployments, the architecture includes:
 
-## User Workflow
-
-1. **Business Setup**: Businesses register and configure their notification preferences
-2. **Client Management**: Businesses import or manually add their clients
-3. **Reminder Configuration**: Businesses create reminders with specified schedules, messages, and notification channels
-4. **Client Assignment**: Clients are associated with specific reminders
-5. **Notification Delivery**:
-   - Automated delivery based on schedule
-   - Manual trigger option for immediate delivery
-6. **Client Experience**:
-   - Clients receive notifications via preferred channels
-   - Clients can view documents/invoices via included links
-   - Clients can make payments via Stripe integration
-7. **Monitoring**:
-   - Businesses track notification history
-   - Payment status updates are recorded
-   - Error handling for failed notifications or payments
+- **Multi-AZ Database**: For database redundancy
+- **Auto-scaling**: To handle variable load
+- **Backup Strategy**: Regular database snapshots
+- **Security Layers**: Including WAF protection and secure credentials management
 
 ## Getting Started
 
@@ -195,47 +193,130 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 #### 3. Install Dependencies
 
-Using pip:\
+Using pip:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Or using uv (faster):
+Or using pyproject.toml (recommended):
 
 ```bash
-uv pip sync requirements.txt
+pip install -e ".[dev]"
 ```
 
-#### 4. Configure Environment
+#### 4. Set Up Environment Configuration
 
-```bash
-# Create development environment file
-cp env/.env.example env/.env.development
+1. Copy the example environment file:
 
-# Edit with your development settings
-# Set SQLALCHEMY_DATABASE_URI to your database connection
-# For quick development: SQLALCHEMY_DATABASE_URI=sqlite:///./dev.db
+   ```bash
+   cp env/.env.example env/.env
+   ```
+
+2. Edit the `.env` file to configure:
+   - Database connections
+   - API keys (AWS, Stripe, etc.)
+   - Server settings (detailed below)
+   - Other environment-specific settings
+
+### Server Configuration
+
+Configure server behavior by setting these environment variables in your `.env` file:
+
+```env
+# Basic server settings
+SERVER_HOST=0.0.0.0        # Host to bind the server to (use 127.0.0.1 for local-only access)
+SERVER_PORT=8000           # Port to run the server on
+SERVER_WORKERS=4           # Number of worker processes (set to 1 for debugging)
+SERVER_RELOAD=false        # Set to true during development for auto-reload
+
+# Environment settings
+ENVIRONMENT=development    # Options: development, testing, production
+LOG_LEVEL=INFO             # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 ```
 
-#### 5. Run Migrations
+Different environments have different recommended settings:
+
+- **Development**: Enable auto-reload and debugging
+
+  ```env
+  SERVER_HOST=127.0.0.1
+  SERVER_WORKERS=1
+  SERVER_RELOAD=true
+  LOG_LEVEL=DEBUG
+  ```
+
+- **Testing**: Use minimal configuration
+
+  ```env
+  SERVER_HOST=127.0.0.1
+  SERVER_WORKERS=1
+  SQL_ECHO=true            # For debugging SQL queries
+  ```
+
+- **Production**: Optimize for performance and security
+
+  ```env
+  SERVER_HOST=0.0.0.0
+  SERVER_WORKERS=4         # Or more based on CPU cores
+  SERVER_RELOAD=false
+  SECURE_COOKIES=true
+  SSL_ENABLED=true
+  ```
+
+#### 5. Configure Admin User
+
+1. Copy the admin setup example file:
+
+   ```bash
+   cp scripts/admin_setup.example.py scripts/admin_setup.py
+   ```
+
+2. Edit `scripts/admin_setup.py` with your desired admin credentials:
+
+   ```python
+   ADMIN_CONFIG = {
+       'username': 'admin',                  # Change this to your admin username
+       'email': 'admin@example.com',         # Change this to your admin email
+       'password': 'change-this-password',   # Use a strong, secure password
+       'first_name': 'Admin',                # Your first name
+       'last_name': 'User',                  # Your last name
+       'business_name': 'Admin Business',    # Your business name
+       'phone_number': '+123456789',         # Your phone number
+       'is_active': True,                    # Keep this True
+       'is_superuser': True                  # Keep this True for admin privileges
+   }
+   ```
+
+3. The application will automatically use these settings when creating the admin user.
+
+#### 6. Run the Application
+
+You can run the application using one of the following methods:
+
+#### Option 1: Using Python
 
 ```bash
-# Set environment
-export ENV=development  # Linux/Mac
-set ENV=development     # Windows CMD
-$env:ENV = "development"  # PowerShell
-
-# Run migrations
-# Database migrations are handled manually```
-
-#### 6. Start the Application
-
-```bash
-python main.py
-# Or directly with uvicorn:
-# uvicorn app.main:app --reload
+python app/main.py
 ```
+
+#### Option 2: Using Uvicorn directly
+
+```bash
+uvicorn app.main:app --host ${SERVER_HOST} --port ${SERVER_PORT} --workers ${SERVER_WORKERS} --reload ${SERVER_RELOAD}
+```
+
+Where the environment variables are set in your `.env` file or can be passed directly:
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --reload
+```
+
+Once running, you can access:
+
+- API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Admin Dashboard: [http://localhost:8000/admin](http://localhost:8000/admin)
+- Login with your configured admin credentials
 
 ### Testing Setup
 
@@ -279,7 +360,43 @@ cp env/.env.example env/.env.production
 # - SSL configuration
 ```
 
-#### 2. Build and Deploy with Docker
+#### 2. AWS Elastic Beanstalk Deployment
+
+The application is configured for deployment on AWS Elastic Beanstalk:
+
+1. Install AWS EB CLI:
+
+   ```bash
+   pip install awsebcli
+   ```
+
+2. Initialize Elastic Beanstalk (if not already done):
+
+   ```bash
+   eb init
+   ```
+
+3. Deploy to Elastic Beanstalk:
+
+   ```bash
+   eb deploy
+   ```
+
+4. Open the deployed application:
+
+   ```bash
+   eb open
+   ```
+
+The deployment uses the following configuration:
+
+- `.elasticbeanstalk/config.yml` - Environment configuration 
+- `.ebextensions/` - Deployment customization
+- `Procfile` - Process specification using Gunicorn with Uvicorn workers
+
+#### 3. Manual Docker Deployment
+
+Alternatively, you can use Docker for deployment:
 
 ```bash
 # Build the Docker image
@@ -287,225 +404,75 @@ docker build -t reminder-backend:latest .
 
 # Run with Docker
 docker run -p 8000:8000 --env-file env/.env.production reminder-backend:latest
-
-# Or use docker-compose
-docker-compose up -d
 ```
 
-#### 3. Monitor Logs
+#### 4. Monitor Logs
+
+Access logs via Elastic Beanstalk:
 
 ```bash
-# View container logs
-docker logs -f reminder-backend
+eb logs
 ```
+
+Or directly in CloudWatch via the AWS Console.
 
 ## Environment Configuration
 
-The application uses environment-specific configuration files located in the `env/` directory:
+The application supports multiple environments through configuration files:
 
-### Environment Types
+### Configuration Types
 
 - **Development** (`ENV=development`): For local development with debugging features enabled
 - **Testing** (`ENV=testing`): For automated tests with SQLite and minimal external dependencies
 - **Production** (`ENV=production`): For deployed instances with security features and optimizations
 
-### Configuration Files
+### Environment Selection
 
-Each environment has its own configuration file:
+The application can be started with a specific environment in several ways:
 
-- `env/.env.development` - Development environment settings
-- `env/.env.testing` - Testing environment settings
-- `env/.env.production` - Production environment settings
+1. Using the entry point script (interactive):
 
-### Setting Up Environment Files
+   ```bash
+   python main.py
+   # Then select: 1) Development, 2) Production, or 3) Testing
+   ```
 
-Create environment files from the example template:
+2. Setting the ENV variable before running:
 
-```bash
-# Create environment files from example
-cp env/.env.example env/.env.development
-cp env/.env.example env/.env.testing
-cp env/.env.example env/.env.production
+   ```bash
+   # Linux/Mac
+   export ENV=development
+   python -m app.main
+   
+   # Windows
+   set ENV=development
+   python -m app.main
+   ```
 
-# Edit files with appropriate settings for each environment
-```
+3. Directly with Uvicorn:
 
-### Key Configuration Settings
+   ```bash
+   ENV=development uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+   ```
 
-Some important environment variables include:
+## Security Features
 
-- **Database Connection**: `SQLALCHEMY_DATABASE_URI` or individual DB_* variables
-- **Security Keys**: `SECRET_KEY` for JWT tokens (unique per environment)
-- **API Configuration**: `API_V1_STR`, `CORS_ORIGINS`, etc.
-- **External Services**: Twilio, SMTP, Stripe credentials
-- **Scheduler Settings**: `DISABLE_SCHEDULER`, `SCHEDULER_TIMEZONE`
-- **Validation Mode**: `STRICT_VALIDATION` (True/False)
+The application implements several security features:
 
-### Running with a Specific Environment
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: Bcrypt-based password protection 
+- **Role-Based Access Control**: Admin/User role separation
+- **HTTPS Enforcement**: Automatic HTTPS redirection in production
+- **Security Headers**: Protection against common web vulnerabilities
+- **Trusted Host Validation**: Request host validation in production
+- **JSON Sanitization**: Protection against JSON-based attacks
+- **Startup Security Checks**: Validation of critical security settings
 
-```bash
-# Set environment before running
-export ENV=development  # Linux/Mac
-set ENV=development     # Windows CMD
-$env:ENV = "development" # Windows PowerShell
+## Event Tracking System
 
-# Then run the application
-python main.py
-```
+The application includes an event system for tracking important operations:
 
-Or specify directly when running:
-
-```bash
-ENV=development python main.py
-```
-
-## Scheduler Service
-
-The application includes a robust scheduler service for processing reminders automatically:
-
-### Scheduler Features
-
-- **Automatic Processing**: Checks for due reminders at regular intervals
-- **Smart Recurrence**: Handles various recurrence patterns (daily, weekly, monthly)
-- **Multi-channel Delivery**: Sends notifications via email, SMS, or WhatsApp
-- **Error Handling**: Robust error handling and retry mechanisms
-
-### Configuration Options
-
-The scheduler service can be configured through environment variables:
-
-```bash
-# Set timezone for scheduler operations
-SCHEDULER_TIMEZONE=UTC
-
-# Completely disable the scheduler (useful for certain testing scenarios)
-DISABLE_SCHEDULER=false
-```
-
-### Testing Mode Behavior
-
-In testing environments (`ENV=testing`), the scheduler has special behavior:
-
-- **Auto-Detection**: Checks for existing reminders before starting
-- **Smart Disable**: Automatically disables itself if no reminders exist
-- **Reduced Logging**: Minimizes log output for cleaner test runs
-- **Manual Override**: Can be completely disabled via `DISABLE_SCHEDULER=true`
-
-The scheduler implementation detects the testing environment and adjusts its behavior:
-
-```python
-# Example from scheduler_service.py
-def start(self):
-    """Start the scheduler service."""
-    logger.info("Starting reminder scheduler service")
-    
-    # Check if scheduler should be disabled via configuration
-    if getattr(settings, "DISABLE_SCHEDULER", False):
-        logger.info("Scheduler disabled via DISABLE_SCHEDULER setting")
-        return
-    
-    # In testing environment, only start if there are reminders
-    if settings.ENV == "testing":
-        db = SessionLocal()
-        try:
-            reminder_count = db.query(Reminder).count()
-            if reminder_count == 0:
-                logger.info("No reminders found in testing environment. Scheduler will not start.")
-                return
-            logger.info(f"Found {reminder_count} reminders in testing environment. Starting scheduler.")
-        finally:
-            db.close()
-            
-    # Continue with regular scheduler initialization...
-```
-
-This behavior makes testing more efficient by:
-
-- Preventing unnecessary background processing during tests
-- Reducing log noise in test output
-- Allowing control over scheduler behavior in different test scenarios
-
-### Scheduler Health Checks
-
-You can verify the scheduler is running correctly by:
-
-1. Checking the application logs for "Scheduler service started" message
-2. Monitoring the "Processing due reminders" log messages (every minute)
-3. Creating a test reminder with a date in the past and verifying it's processed
-
-## Code Architecture Details
-
-### Repository Pattern
-
-The application implements the Repository Pattern to separate data access logic from business logic:
-
-#### Repository Structure
-
-Each model has a corresponding repository class that handles all database operations:
-
-```python
-# Example repository method
-async def get_reminder_by_id(db: Session, reminder_id: int) -> Optional[Reminder]:
-    return db.query(Reminder).filter(Reminder.id == reminder_id).first()
-```
-
-This pattern provides several advantages:
-
-- **Abstraction**: Services don't need to know how data is stored or retrieved
-- **Testability**: Repositories can be mocked for service testing
-- **Maintainability**: Database queries are centralized and reusable
-
-#### Service-Repository Interaction
-
-Services use repositories to interact with the database:
-
-```python
-# Example service using repository
-async def process_reminder(reminder_id: int):
-    with db_session() as db:
-        reminder = await reminder_repository.get_reminder_by_id(db, reminder_id)
-        if reminder:
-            # Process the reminder...
-```
-
-#### Key Repository Methods
-
-Common methods implemented across repositories:
-
-- `create_*` - Create new records
-- `get_*_by_id` - Retrieve single records
-- `get_*_by_*` - Filter based on criteria
-- `list_*` - Retrieve collections with filtering/pagination
-- `update_*` - Update existing records
-- `delete_*` - Remove records
-
-### Service Implementation
-
-The service layer contains business logic and coordinates across multiple repositories:
-
-- **Stateless Services**: All functions are stateless and take explicit dependencies
-- **Transaction Management**: Services manage database transactions
-- **External Integration**: Services handle external API calls
-- **Error Handling**: Centralized error handling and retries
-
-## Error Handling
-
-We've standardized error handling throughout the codebase to ensure consistency and reliability. The main principles are:
-
-1. **Use explicit exceptions** rather than returning None/boolean values
-2. **Consistent transaction management** using the `@with_transaction` decorator
-3. **Centralized error handling** using the `@handle_exceptions` decorator
-
-### Using Error Handling Utilities
-
-Services should use these decorators from `app/core/error_handling.py`:
-
-```python
-# Example service method with proper error handling
-@with_transaction  # Transaction management first
-@handle_exceptions(error_message="Failed to create user")  # Error handling second
-def create_user(self, db: Session, *, user_in: UserCreate) -> User:
-    # Implementation...
-```
-
-See the complete documentation in [docs/error_handling_guide.md](docs/error_handling_guide.md).
+- **Event Recording**: Captures key application events
+- **Event Storage**: Persists events for audit purposes
+- **Event Monitoring**: Admin interface for reviewing events
+- **Event Recovery**: Ability to recover and replay events
