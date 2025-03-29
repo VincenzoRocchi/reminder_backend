@@ -64,9 +64,33 @@ class BaseAppSettings(BaseSettings):
     # ------------------------------
     # EVENT SYSTEM SETTINGS
     # ------------------------------
+    EVENT_DB_ENGINE: str = Field(
+        default=os.getenv("EVENT_DB_ENGINE", ""),
+        description="Event store database engine (e.g. mysql+pymysql, postgresql, sqlite)"
+    )
+    EVENT_DB_HOST: str = Field(
+        default=os.getenv("EVENT_DB_HOST", ""),
+        description="Event store database host"
+    )
+    EVENT_DB_PORT: int = Field(
+        default=int(os.getenv("EVENT_DB_PORT", "3306")),
+        description="Event store database port"
+    )
+    EVENT_DB_USER: str = Field(
+        default=os.getenv("EVENT_DB_USER", ""),
+        description="Event store database user"
+    )
+    EVENT_DB_PASSWORD: str = Field(
+        default=os.getenv("EVENT_DB_PASSWORD", ""),
+        description="Event store database password"
+    )
+    EVENT_DB_NAME: str = Field(
+        default=os.getenv("EVENT_DB_NAME", "events"),
+        description="Event store database name"
+    )
     EVENT_STORE_URL: Optional[str] = Field(
         default=os.getenv("EVENT_STORE_URL"),
-        description="Event store database URL. If not set, uses the main database."
+        description="Event store database URL. If not set, it will be built using EVENT_DB_* settings or fallback to main database."
     )
     
     EVENT_PERSISTENCE_ENABLED: bool = Field(
@@ -101,9 +125,34 @@ class BaseAppSettings(BaseSettings):
     
     @model_validator(mode='after')
     def set_event_store_url(self) -> 'BaseAppSettings':
-        """Set the event store URL to the main database URL if not explicitly configured."""
-        if not self.EVENT_STORE_URL and self.SQLALCHEMY_DATABASE_URI:
+        """Build EVENT_STORE_URL from components or fallback to the main database URL if not configured."""
+        # Use EVENT_STORE_URL directly if provided
+        if self.EVENT_STORE_URL:
+            return self
+            
+        # Build EVENT_STORE_URL from EVENT_DB_* components if available
+        if self.EVENT_DB_ENGINE:
+            # Special case for SQLite
+            if self.EVENT_DB_ENGINE == 'sqlite':
+                self.EVENT_STORE_URL = f"sqlite:///{self.EVENT_DB_NAME if self.EVENT_DB_NAME else 'events.db'}"
+                return self
+                
+            # For other database engines, need host, user, password
+            if all([self.EVENT_DB_HOST, self.EVENT_DB_USER, self.EVENT_DB_PASSWORD]):
+                # Build the URI using the configured engine
+                uri = f"{self.EVENT_DB_ENGINE}://{self.EVENT_DB_USER}:{self.EVENT_DB_PASSWORD}@{self.EVENT_DB_HOST}:{self.EVENT_DB_PORT}/{self.EVENT_DB_NAME}"
+                
+                # Add SSL for non-development environments
+                if self.ENV != "development" and self.EVENT_DB_ENGINE.startswith("mysql"):
+                    uri += "?ssl=true"
+                    
+                self.EVENT_STORE_URL = uri
+                return self
+        
+        # Fallback to main database if EVENT_DB_* components are incomplete
+        if self.SQLALCHEMY_DATABASE_URI:
             self.EVENT_STORE_URL = self.SQLALCHEMY_DATABASE_URI
+            
         return self
     
     @model_validator(mode='after')

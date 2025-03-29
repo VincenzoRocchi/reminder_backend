@@ -21,7 +21,7 @@ async def read_email_configurations(
     """
     Retrieve all email configurations for the current user.
     """
-    return email_configuration_service.get_user_email_configurations(
+    return email_configuration_service.get_email_configurations_by_user(
         db,
         user_id=current_user.id,
         skip=skip,
@@ -52,9 +52,9 @@ async def read_email_configuration(
     """
     Get a specific email configuration by ID.
     """
-    return email_configuration_service.get_email_configuration(
+    return email_configuration_service.get_email_configuration_by_user(
         db,
-        config_id=config_id,
+        email_configuration_id=config_id,
         user_id=current_user.id
     )
 
@@ -70,9 +70,9 @@ async def update_email_configuration(
     """
     return email_configuration_service.update_email_configuration(
         db,
-        config_id=config_id,
+        email_configuration_id=config_id,
         user_id=current_user.id,
-        config_in=config_in
+        obj_in=config_in
     )
 
 @router.delete("/{config_id}")
@@ -86,7 +86,7 @@ async def delete_email_configuration(
     """
     email_configuration_service.delete_email_configuration(
         db,
-        config_id=config_id,
+        email_configuration_id=config_id,
         user_id=current_user.id
     )
     return {"detail": "Email configuration deleted successfully"}
@@ -102,7 +102,7 @@ async def test_email_configuration(
     """
     config = email_configuration_service.test_email_configuration(
         db,
-        config_id=config_id,
+        email_configuration_id=config_id,
         user_id=current_user.id
     )
     

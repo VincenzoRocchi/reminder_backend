@@ -44,7 +44,7 @@ async def read_active_users(
     """
     return user_service.get_active_users(db, skip=skip, limit=limit)
 
-@router.get("/all", response_model=List[User])
+@router.get("/admin/all", response_model=List[User])
 async def read_all_users(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[UserModel, Depends(get_current_active_superuser)],
@@ -53,6 +53,7 @@ async def read_all_users(
 ):
     """
     Retrieve all users including inactive ones. Only superusers can access this endpoint.
+    Admin endpoint for user management.
     """
     return user_service.get_all_users(db, skip=skip, limit=limit)
 
