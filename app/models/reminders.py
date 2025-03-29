@@ -7,7 +7,6 @@ from app.database import Base
 
 class ReminderTypeEnum(str, enum.Enum):
     """Enum for reminder types"""
-    PAYMENT = "PAYMENT"
     DEADLINE = "DEADLINE"
     NOTIFICATION = "NOTIFICATION"
 

@@ -137,7 +137,7 @@ class SenderIdentityService:
             user_id: User ID
             identity_type: Type of identity
             email: Email address (for EMAIL type)
-            phone_number: Phone number (for PHONE or WHATSAPP type)
+            phone_number: Phone number (for PHONE type)
             
         Returns:
             Optional[SenderIdentity]: Sender identity if found, None otherwise
@@ -146,7 +146,7 @@ class SenderIdentityService:
             return sender_identity_repository.get_by_filter(
                 db, user_id=user_id, identity_type=identity_type, email=email
             )
-        elif identity_type in [IdentityTypeEnum.PHONE, IdentityTypeEnum.WHATSAPP] and phone_number:
+        elif identity_type == IdentityTypeEnum.PHONE and phone_number:
             return sender_identity_repository.get_by_filter(
                 db, user_id=user_id, identity_type=identity_type, phone_number=phone_number
             )
@@ -339,7 +339,7 @@ class SenderIdentityService:
         # Special handling for changes that might require re-verification
         if identity_type == IdentityTypeEnum.EMAIL and obj_in.email and obj_in.email != sender_identity.email:
             identity_dict["is_verified"] = False
-        elif identity_type in [IdentityTypeEnum.PHONE, IdentityTypeEnum.WHATSAPP] and obj_in.phone_number and obj_in.phone_number != sender_identity.phone_number:
+        elif identity_type in [IdentityTypeEnum.PHONE] and obj_in.phone_number and obj_in.phone_number != sender_identity.phone_number:
             identity_dict["is_verified"] = False
         
         sender_identity = sender_identity_repository.update(

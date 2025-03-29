@@ -1,17 +1,16 @@
 # Reminder App
 
-A comprehensive backend system for businesses (such as accounting firms) to manage and send reminders to their clients via email, SMS, and WhatsApp, with integrated payment capabilities.
+A comprehensive backend system for businesses (such as accounting firms) to manage and send reminders to their clients via email, SMS, and WhatsApp.
 
 ## Features
 
 - **User & Client Management**: Register, authenticate, and manage business users and their clients
 - **Business Management**: Create and manage business accounts with customized settings
-- **Reminder System**: Set up one-time or recurring reminders with different types (deadlines, payments, etc.)
+- **Reminder System**: Set up one-time or recurring reminders with different types (deadlines, notifications, etc.)
 - **Multi-channel Notifications**: Send reminders via email, SMS, or WhatsApp
 - **Scheduling**: Automated reminder delivery at specified times with manual trigger option
-- **Payment Integration**: Include payment links (Stripe) in reminders for easy client transactions
-- **Dashboard & Analytics**: Monitor notification history and payment status
-- **Error Handling**: Robust error handling for notification delivery and payment processing
+- **Dashboard & Analytics**: Monitor notification history and status
+- **Error Handling**: Robust error handling for notification delivery
 - **Event-Driven Architecture**: Centralized event system for tracking and monitoring application events
 
 ## Technology Stack
@@ -23,7 +22,6 @@ A comprehensive backend system for businesses (such as accounting firms) to mana
 | **ORM** | SQLAlchemy 2.0+ |
 | **Migrations** | Alembic |
 | **Notifications** | SMTP (Email), Twilio (SMS), WhatsApp API |
-| **Payment Processing** | Stripe API |
 | **Deployment** | AWS Elastic Beanstalk, Docker |
 | **Task Scheduling** | APScheduler (integrated in application) |
 | **Caching** | Redis |
@@ -91,8 +89,7 @@ reminder_backend/
 ├── .elasticbeanstalk/         # AWS Elastic Beanstalk configuration
 ├── .ebextensions/             # AWS EB deployment configurations
 ├── logs/                      # Application logs directory
-├── docs/                      # Extended documentation
-└── wf_diagrams/               # Workflow and architecture diagrams
+└── docs/                      # Extended documentation
 ```
 
 ## Architecture
@@ -103,7 +100,7 @@ The application follows a layered architecture with clear separation of concerns
 
 - **Endpoints**: Handle HTTP requests and responses
 - **Dependencies**: Shared components like authentication
-- **Routes**: API routing configuration 
+- **Routes**: API routing configuration
 
 ### Service Layer
 
@@ -164,7 +161,6 @@ For high-availability deployments, the architecture includes:
 - Twilio account (for SMS)
 - SMTP server (for Email)
 - WhatsApp Business API access
-- Stripe account (for payment processing)
 
 ### Development Setup
 
@@ -354,7 +350,6 @@ cp env/.env.example env/.env.production
 # Configure all required settings for production:
 # - Strong SECRET_KEY
 # - Production database credentials
-# - Stripe API keys
 # - Twilio credentials
 # - CORS settings
 # - SSL configuration
@@ -390,7 +385,7 @@ The application is configured for deployment on AWS Elastic Beanstalk:
 
 The deployment uses the following configuration:
 
-- `.elasticbeanstalk/config.yml` - Environment configuration 
+- `.elasticbeanstalk/config.yml` - Environment configuration
 - `.ebextensions/` - Deployment customization
 - `Procfile` - Process specification using Gunicorn with Uvicorn workers
 
@@ -460,7 +455,7 @@ The application can be started with a specific environment in several ways:
 The application implements several security features:
 
 - **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: Bcrypt-based password protection 
+- **Password Hashing**: Bcrypt-based password protection
 - **Role-Based Access Control**: Admin/User role separation
 - **HTTPS Enforcement**: Automatic HTTPS redirection in production
 - **Security Headers**: Protection against common web vulnerabilities

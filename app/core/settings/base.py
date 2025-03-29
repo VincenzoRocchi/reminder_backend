@@ -85,8 +85,8 @@ class BaseAppSettings(BaseSettings):
         description="Event store database password"
     )
     EVENT_DB_NAME: str = Field(
-        default=os.getenv("EVENT_DB_NAME", "events"),
-        description="Event store database name"
+        default=os.getenv("EVENT_DB_NAME", ""),
+        description="Event store database name. Use ':memory:' for in-memory SQLite database."
     )
     EVENT_STORE_URL: Optional[str] = Field(
         default=os.getenv("EVENT_STORE_URL"),
@@ -134,7 +134,13 @@ class BaseAppSettings(BaseSettings):
         if self.EVENT_DB_ENGINE:
             # Special case for SQLite
             if self.EVENT_DB_ENGINE == 'sqlite':
-                self.EVENT_STORE_URL = f"sqlite:///{self.EVENT_DB_NAME if self.EVENT_DB_NAME else 'events.db'}"
+                # Handle in-memory SQLite database
+                if self.EVENT_DB_NAME == ":memory:":
+                    self.EVENT_STORE_URL = "sqlite:///:memory:"
+                else:
+                    # Use the specified file name or default to events.db
+                    db_name = self.EVENT_DB_NAME or "events.db"
+                    self.EVENT_STORE_URL = f"sqlite:///{db_name}"
                 return self
                 
             # For other database engines, need host, user, password
@@ -151,6 +157,7 @@ class BaseAppSettings(BaseSettings):
         
         # Fallback to main database if EVENT_DB_* components are incomplete
         if self.SQLALCHEMY_DATABASE_URI:
+            # Quietly use the main database connection
             self.EVENT_STORE_URL = self.SQLALCHEMY_DATABASE_URI
             
         return self

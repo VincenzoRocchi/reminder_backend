@@ -6,13 +6,12 @@ from enum import Enum
 class IdentityType(str, Enum):
     PHONE = "PHONE"
     EMAIL = "EMAIL"
-    WHATSAPP = "WHATSAPP"  # Added WhatsApp as a distinct type
 
 class SenderIdentityBase(BaseModel):
     identity_type: IdentityType = Field(
         ...,
         example="EMAIL",
-        description="Type of identity (EMAIL, PHONE, or WHATSAPP)"
+        description="Type of identity (EMAIL or PHONE)"
     )
     # We'll use field_validator to validate based on type
     email: Optional[EmailStr] = Field(
@@ -23,7 +22,7 @@ class SenderIdentityBase(BaseModel):
     phone_number: Optional[str] = Field(
         None, 
         example="+1234567890",
-        description="Phone number for PHONE or WHATSAPP type identities (required if identity_type is PHONE or WHATSAPP)"
+        description="Phone number for PHONE type identities (required if identity_type is PHONE)"
     )
     display_name: str = Field(
         ..., 
@@ -55,7 +54,7 @@ class SenderIdentityBase(BaseModel):
     @classmethod
     def validate_phone_required_for_phone_types(cls, v: Optional[str], info):
         identity_type = info.data.get('identity_type')
-        if identity_type in [IdentityType.PHONE, IdentityType.WHATSAPP] and not v:
+        if identity_type in [IdentityType.PHONE] and not v:
             raise ValueError(f"phone_number field is required when identity_type is {identity_type}")
         
         # Validate phone number format if provided
@@ -85,7 +84,7 @@ class SenderIdentityUpdate(BaseModel):
     identity_type: Optional[IdentityType] = Field(
         None,
         example="EMAIL",
-        description="Updated type of identity"
+        description="Updated type of identity (EMAIL or PHONE)"
     )
     email: Optional[EmailStr] = Field(
         None,
@@ -128,7 +127,7 @@ class SenderIdentityUpdate(BaseModel):
     @classmethod
     def validate_phone_for_updated_type(cls, v: Optional[str], info):
         identity_type = info.data.get('identity_type')
-        if identity_type in [IdentityType.PHONE, IdentityType.WHATSAPP] and v is None:
+        if identity_type in [IdentityType.PHONE] and v is None:
             raise ValueError(f"phone_number field must be provided when updating to {identity_type} type")
             
         # Validate phone number format if provided

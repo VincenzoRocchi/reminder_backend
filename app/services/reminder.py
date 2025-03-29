@@ -226,7 +226,12 @@ class ReminderService:
             InvalidConfigurationError: If reminder configuration is invalid
         """
         # Validate client exists and belongs to user
-        if reminder_in.client_id:
+        if hasattr(reminder_in, 'client_ids') and reminder_in.client_ids:
+            for client_id in reminder_in.client_ids:
+                client = self.client_repository.get(db, id=client_id)
+                if not client or client.user_id != user_id:
+                    raise ClientNotFoundError(f"Client with ID {client_id} not found")
+        elif hasattr(reminder_in, 'client_id') and reminder_in.client_id:
             client = self.client_repository.get(db, id=reminder_in.client_id)
             if not client or client.user_id != user_id:
                 raise ClientNotFoundError(f"Client with ID {reminder_in.client_id} not found")
@@ -234,6 +239,23 @@ class ReminderService:
         # Validate reminder configuration
         if reminder_in.is_recurring and not reminder_in.recurrence_pattern:
             raise InvalidConfigurationError("Recurring reminders must have a recurrence pattern")
+        
+        # Get the sender identity to validate notification type compatibility
+        from app.services.senderIdentity import sender_identity_service
+        from app.models.senderIdentities import IdentityTypeEnum
+        
+        sender_identity = sender_identity_service.get_sender_identity(
+            db, 
+            sender_identity_id=reminder_in.sender_identity_id, 
+            user_id=user_id
+        )
+        
+        # Validate notification type is compatible with sender identity type
+        if sender_identity.identity_type == IdentityTypeEnum.EMAIL and reminder_in.notification_type != NotificationType.EMAIL:
+            raise InvalidConfigurationError("EMAIL sender identity can only be used with EMAIL notification type")
+        
+        if sender_identity.identity_type == IdentityTypeEnum.PHONE and reminder_in.notification_type not in [NotificationType.SMS, NotificationType.WHATSAPP]:
+            raise InvalidConfigurationError("PHONE sender identity can only be used with SMS or WHATSAPP notification types")
         
         # Create reminder with user_id
         if isinstance(reminder_in, dict):
@@ -245,6 +267,16 @@ class ReminderService:
         
         # Create the reminder
         created_reminder = self.repository.create(db, obj_in=obj_data)
+        
+        # Add clients to the reminder if specified
+        if hasattr(reminder_in, 'client_ids') and reminder_in.client_ids:
+            from app.services.reminderRecipient import reminder_recipient_service
+            for client_id in reminder_in.client_ids:
+                reminder_recipient_service.create_reminder_recipient(
+                    db,
+                    obj_in={"reminder_id": created_reminder.id, "client_id": client_id},
+                    user_id=user_id
+                )
         
         return created_reminder
     
@@ -280,6 +312,42 @@ class ReminderService:
         # Validate updated reminder configuration
         if getattr(reminder_in, 'is_recurring', reminder.is_recurring) and not getattr(reminder_in, 'recurrence_pattern', reminder.recurrence_pattern):
             raise InvalidConfigurationError("Recurring reminders must have a recurrence pattern")
+        
+        # Check notification type compatibility if sender_identity_id or notification_type is being updated
+        from app.services.senderIdentity import sender_identity_service
+        from app.models.senderIdentities import IdentityTypeEnum
+        
+        # If sender_identity_id is being updated, check against the notification_type
+        if hasattr(reminder_in, 'sender_identity_id') and reminder_in.sender_identity_id:
+            sender_identity = sender_identity_service.get_sender_identity(
+                db,
+                sender_identity_id=reminder_in.sender_identity_id,
+                user_id=user_id
+            )
+            
+            # Use the new notification_type if provided, otherwise use the existing one
+            notification_type = reminder_in.notification_type if hasattr(reminder_in, 'notification_type') and reminder_in.notification_type else reminder.notification_type
+            
+            if sender_identity.identity_type == IdentityTypeEnum.EMAIL and notification_type != NotificationType.EMAIL:
+                raise InvalidConfigurationError("EMAIL sender identity can only be used with EMAIL notification type")
+            
+            if sender_identity.identity_type == IdentityTypeEnum.PHONE and notification_type not in [NotificationType.SMS, NotificationType.WHATSAPP]:
+                raise InvalidConfigurationError("PHONE sender identity can only be used with SMS or WHATSAPP notification types")
+        
+        # If notification_type is being updated, check against the sender_identity_id
+        elif hasattr(reminder_in, 'notification_type') and reminder_in.notification_type:
+            # Use the existing sender_identity_id
+            sender_identity = sender_identity_service.get_sender_identity(
+                db,
+                sender_identity_id=reminder.sender_identity_id,
+                user_id=user_id
+            )
+            
+            if sender_identity.identity_type == IdentityTypeEnum.EMAIL and reminder_in.notification_type != NotificationType.EMAIL:
+                raise InvalidConfigurationError("EMAIL sender identity can only be used with EMAIL notification type")
+            
+            if sender_identity.identity_type == IdentityTypeEnum.PHONE and reminder_in.notification_type not in [NotificationType.SMS, NotificationType.WHATSAPP]:
+                raise InvalidConfigurationError("PHONE sender identity can only be used with SMS or WHATSAPP notification types")
         
         # Update the reminder
         updated_reminder = self.repository.update(db, db_obj=reminder, obj_in=reminder_in)

@@ -46,6 +46,34 @@ class TestingSettings(BaseAppSettings):
         return self
     
     # =======================================================================
+    # EVENT STORE VALIDATORS
+    # =======================================================================
+    
+    # Log information about event database engine configuration
+    @field_validator('EVENT_DB_ENGINE')
+    def log_event_db_engine(cls, v):
+        if not v:
+            logger.debug("No EVENT_DB_ENGINE explicitly set in testing environment.")
+        else:
+            logger.debug(f"Using {v} as EVENT_DB_ENGINE in testing environment.")
+        return v
+    
+    # Validate event store configuration after all values are set
+    @model_validator(mode='after')
+    def validate_event_store_config(self) -> 'TestingSettings':
+        # Only create default configuration if no EVENT_STORE_URL is provided
+        # and no EVENT_DB_ENGINE is specified
+        if not self.EVENT_STORE_URL and not self.EVENT_DB_ENGINE:
+            logger.debug("No explicit event store configuration found, using main database configuration.")
+            self.EVENT_STORE_URL = self.SQLALCHEMY_DATABASE_URI
+            
+        # For logging purposes only
+        if self.EVENT_STORE_URL:
+            logger.debug(f"Event store URL configured as: {self.EVENT_STORE_URL}")
+            
+        return self
+    
+    # =======================================================================
     # SECURITY VALIDATORS
     # =======================================================================
     

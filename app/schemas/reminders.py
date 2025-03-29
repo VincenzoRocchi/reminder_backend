@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 class ReminderType(str, Enum):
-    PAYMENT = "PAYMENT"
     DEADLINE = "DEADLINE"
     NOTIFICATION = "NOTIFICATION"
 
@@ -24,18 +23,18 @@ class ReminderBase(BaseModel):
         ..., 
         min_length=1, 
         max_length=255, 
-        example="Quarterly Invoice Payment",
+        example="Quarterly Tax Deadline",
         description="Short title describing the reminder"
     )
     description: Optional[str] = Field(
         None, 
-        example="Payment due for Q2 services. Reference: INV-2023-Q2",
+        example="Tax filing deadline for Q2. Reference: TAX-2023-Q2",
         description="Detailed information about the reminder"
     )
     reminder_type: ReminderType = Field(
         ..., 
-        example="PAYMENT", 
-        description="Type of reminder (PAYMENT, DEADLINE, or NOTIFICATION)"
+        example="DEADLINE", 
+        description="Type of reminder (DEADLINE or NOTIFICATION)"
     )
     notification_type: NotificationType = Field(
         ..., 
@@ -101,6 +100,21 @@ class ReminderCreate(ReminderBase):
         example=[1, 2, 3],
         description="List of client IDs who should receive this reminder"
     )
+    
+    @field_validator('notification_type')
+    @classmethod
+    def validate_notification_type_match_identity(cls, v, info):
+        """
+        Validate that the notification type matches the sender identity type:
+        - If using a PHONE sender identity, notification_type must be SMS or WHATSAPP
+        - If using an EMAIL sender identity, notification_type must be EMAIL
+        
+        Note: This validation happens at the service level when the sender identity is retrieved,
+        but this validator provides early feedback in the API documentation.
+        """
+        if v not in [NotificationType.EMAIL, NotificationType.SMS, NotificationType.WHATSAPP]:
+            raise ValueError(f"Notification type must be one of: EMAIL, SMS, WHATSAPP")
+        return v
 
 class ReminderCreateDB(ReminderBase):
     """Schema for storing a reminder in the database (without client_ids)"""
@@ -116,17 +130,17 @@ class ReminderUpdate(BaseModel):
         None, 
         min_length=1, 
         max_length=255, 
-        example="Updated: Quarterly Invoice Payment",
+        example="Updated: Quarterly Tax Deadline",
         description="New title for the reminder"
     )
     description: Optional[str] = Field(
         None, 
-        example="Updated payment details with new due date. Reference: INV-2023-Q2-REV",
+        example="Updated tax filing details with new due date. Reference: TAX-2023-Q2-REV",
         description="Updated description for the reminder"
     )
     reminder_type: Optional[ReminderType] = Field(
         None, 
-        example="PAYMENT", 
+        example="DEADLINE", 
         description="Updated type of reminder"
     )
     notification_type: Optional[NotificationType] = Field(

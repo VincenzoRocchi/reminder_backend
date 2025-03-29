@@ -9,7 +9,7 @@ class IdentityTypeEnum(str, enum.Enum):
     """Enum for sender identity types"""
     PHONE = "PHONE"
     EMAIL = "EMAIL"
-    WHATSAPP = "WHATSAPP"  # Added WhatsApp as a distinct type
+    # WHATSAPP option removed to simplify to just PHONE and EMAIL types
 
 class SenderIdentity(Base):
     __tablename__ = "sender_identities"

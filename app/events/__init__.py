@@ -11,7 +11,7 @@ from typing import Optional
 
 from app.events.dispatcher import event_dispatcher
 from app.events.handlers import register_all_handlers
-from app.events.persistence import event_store
+from app.events.persistence import event_store, EventStore
 from app.events.utils import (
     emit_event_safely,
     emit_event_async_safely, 
@@ -21,6 +21,7 @@ from app.events.utils import (
     transactional_events,
     queue_event
 )
+from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +55,17 @@ def setup_event_system(recover_events: bool = True, recovery_limit: int = 100):
     Returns:
         The configured event dispatcher
     """
-    logger.info("Setting up event system...")
+    logger.info(f"Starting event system in {settings.ENV} environment")
     
     # Register all event handlers
     register_all_handlers()
     
-    # Queue recovery of unprocessed events
-    if recover_events:
+    # Queue recovery of unprocessed events if enabled
+    if recover_events and settings.EVENT_PERSISTENCE_ENABLED and settings.EVENT_RECOVERY_ENABLED:
+        logger.info(f"Scheduling recovery of unprocessed events (limit: {recovery_limit})")
         asyncio.create_task(recover_unprocessed_events(limit=recovery_limit))
+    else:
+        logger.debug("Event recovery is disabled")
     
     return event_dispatcher
 

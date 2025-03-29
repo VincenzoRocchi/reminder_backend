@@ -58,7 +58,7 @@ def create_reminder_created_event(
         reminder_id: ID of the created reminder
         user_id: ID of the user who created the reminder
         title: Title of the reminder
-        reminder_type: Type of reminder (PAYMENT, DEADLINE, etc.)
+        reminder_type: Type of reminder (DEADLINE, NOTIFICATION)
         notification_type: Type of notification (EMAIL, SMS, etc.)
         reminder_date: Date when the reminder is due
         is_recurring: Whether the reminder is recurring
@@ -172,7 +172,7 @@ def create_reminder_due_event(
         reminder_id: ID of the due reminder
         user_id: ID of the user who owns the reminder
         title: Title of the reminder
-        reminder_type: Type of reminder (PAYMENT, DEADLINE, etc.)
+        reminder_type: Type of reminder (DEADLINE, NOTIFICATION)
         notification_type: Type of notification (EMAIL, SMS, etc.)
         reminder_date: Date when the reminder is due
         is_recurring: Whether the reminder is recurring
