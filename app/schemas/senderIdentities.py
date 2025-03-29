@@ -8,6 +8,45 @@ class IdentityType(str, Enum):
     EMAIL = "EMAIL"
     # WHATSAPP option removed - now handled by notification_type instead
 
+# Add nested schema for creating email configuration inline
+class EmailConfigurationInline(BaseModel):
+    """Schema for creating an email configuration inline when creating an email sender identity"""
+    name: str = Field(
+        ..., 
+        example="Company Gmail",
+        description="Name of this email configuration"
+    )
+    smtp_host: str = Field(
+        ..., 
+        example="smtp.gmail.com",
+        description="SMTP server hostname"
+    )
+    smtp_port: int = Field(
+        ..., 
+        example=587,
+        description="SMTP server port"
+    )
+    smtp_user: str = Field(
+        ..., 
+        example="user@example.com",
+        description="SMTP username/login"
+    )
+    smtp_password: str = Field(
+        ..., 
+        example="password123",
+        description="SMTP password"
+    )
+    use_tls: bool = Field(
+        True,
+        example=True,
+        description="Whether to use TLS for SMTP connection"
+    )
+    email_from: str = Field(
+        ...,
+        example="support@yourcompany.com", 
+        description="From email address used for all emails sent with this configuration"
+    )
+
 class SenderIdentityBase(BaseModel):
     identity_type: IdentityType = Field(
         ...,
@@ -91,10 +130,10 @@ class EmailSenderIdentityBase(BaseModel):
         example="Company Support Team",
         description="Name shown to recipients when sending from this identity"
     )
-    email_configuration_id: int = Field(
-        ...,
+    email_configuration_id: Optional[int] = Field(
+        None,
         example=1,
-        description="ID of the email configuration to use"
+        description="ID of the email configuration to use (optional, can be added later)"
     )
     is_default: bool = Field(
         False,
@@ -140,7 +179,10 @@ class SenderIdentityCreate(SenderIdentityBase):
 
 class EmailSenderIdentityCreate(EmailSenderIdentityBase):
     """Schema for creating a new email sender identity"""
-    pass
+    email_configuration: Optional[EmailConfigurationInline] = Field(
+        None,
+        description="Email configuration details to create inline (alternative to email_configuration_id)"
+    )
 
 class PhoneSenderIdentityCreate(PhoneSenderIdentityBase):
     """Schema for creating a new phone sender identity"""
@@ -234,6 +276,10 @@ class EmailSenderIdentityUpdate(BaseModel):
         example=2,
         description="Updated email configuration ID"
     )
+    email_configuration: Optional[EmailConfigurationInline] = Field(
+        None,
+        description="Email configuration details to create inline (alternative to email_configuration_id)"
+    )
     is_default: Optional[bool] = Field(
         None,
         example=True,
@@ -291,6 +337,11 @@ class SenderIdentityInDBBase(SenderIdentityBase):
         ...,
         example=True,
         description="Whether this identity has been verified (required before use)"
+    )
+    is_complete: bool = Field(
+        ...,
+        example=True,
+        description="Whether this identity has all required configuration (e.g., email configuration for EMAIL type)"
     )
     created_at: datetime = Field(
         ...,

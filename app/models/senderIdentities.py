@@ -28,6 +28,7 @@ class SenderIdentity(Base):
     display_name = Column(String(255), nullable=False)  # How it appears to recipients
     is_verified = Column(Boolean, default=False)
     is_default = Column(Boolean, default=False)
+    is_complete = Column(Boolean, default=False)  # Whether all required configuration is present
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

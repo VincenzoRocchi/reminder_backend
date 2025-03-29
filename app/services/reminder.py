@@ -250,6 +250,19 @@ class ReminderService:
             user_id=user_id
         )
         
+        # Validate sender identity is complete
+        if not sender_identity.is_complete:
+            if sender_identity.identity_type == IdentityTypeEnum.EMAIL:
+                raise InvalidConfigurationError(
+                    f"Sender identity '{sender_identity.display_name}' is incomplete. "
+                    f"Please add an email configuration before using it for reminders."
+                )
+            else:
+                raise InvalidConfigurationError(
+                    f"Sender identity '{sender_identity.display_name}' is incomplete. "
+                    f"Please complete the setup before using it for reminders."
+                )
+        
         # Validate notification type is compatible with sender identity type
         if sender_identity.identity_type == IdentityTypeEnum.EMAIL and reminder_in.notification_type != NotificationType.EMAIL:
             raise InvalidConfigurationError("EMAIL sender identity can only be used with EMAIL notification type")

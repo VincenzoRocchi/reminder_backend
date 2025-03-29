@@ -8,7 +8,6 @@ from app.models.users import User as UserModel
 from app.models.senderIdentities import IdentityTypeEnum
 from app.schemas.senderIdentities import (
     SenderIdentity, 
-    SenderIdentityCreate, 
     SenderIdentityUpdate,
     EmailSenderIdentityCreate,
     EmailSenderIdentityUpdate,
@@ -17,6 +16,7 @@ from app.schemas.senderIdentities import (
 )
 from app.core.exceptions import AppException
 from app.services.senderIdentity import sender_identity_service
+from app.services.emailConfiguration import email_configuration_service
 
 router = APIRouter()
 
@@ -31,6 +31,9 @@ async def read_sender_identities(
     """
     Retrieve all sender identities for the current user.
     Optionally filter by identity type.
+    
+    - Use `identity_type=EMAIL` to get only email identities
+    - Use `identity_type=PHONE` to get only phone identities
     """
     if identity_type:
         try:
@@ -52,25 +55,6 @@ async def read_sender_identities(
         identity_type=identity_type_enum
     )
 
-@router.post("/", response_model=SenderIdentity, status_code=status.HTTP_201_CREATED)
-async def create_sender_identity(
-    identity_in: Annotated[SenderIdentityCreate, Body()],
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-):
-    """
-    Create a new sender identity for the current user.
-    
-    Note: For a more streamlined API, consider using the type-specific endpoints:
-    - POST /sender-identities/email
-    - POST /sender-identities/phone
-    """
-    return sender_identity_service.create_sender_identity(
-        db,
-        obj_in=identity_in,
-        user_id=current_user.id
-    )
-
 @router.post("/email", response_model=SenderIdentity, status_code=status.HTTP_201_CREATED)
 async def create_email_sender_identity(
     identity_in: Annotated[EmailSenderIdentityCreate, Body()],
@@ -80,25 +64,46 @@ async def create_email_sender_identity(
     """
     Create a new email sender identity for the current user.
     
-    This endpoint provides a simplified interface for creating email identities:
-    - No need to specify identity_type (automatically set to EMAIL)
-    - Only relevant fields for email identities are required
+    You can create an email sender identity in two ways:
+    
+    1. With an existing email configuration:
+       - Provide the `email_configuration_id` field
+    
+    2. With a new email configuration inline:
+       - Provide `email_configuration` object with SMTP details
+    
+    The identity can also be created without any email configuration
+    and completed later by updating it to add a configuration.
     
     Required fields:
     - email: The email address for this identity
     - display_name: Name shown to recipients
-    - email_configuration_id: ID of an existing email configuration
     
     Optional fields:
+    - email_configuration_id: ID of an existing email configuration
+    - email_configuration: Object with new configuration details
     - is_default: Whether this should be the default email identity
     """
+    # Check if we need to create an email configuration first
+    email_configuration_id = identity_in.email_configuration_id
+    
+    if identity_in.email_configuration:
+        # Create email configuration inline
+        email_config_obj = email_configuration_service.create_email_configuration(
+            db,
+            obj_in=identity_in.email_configuration.model_dump(),
+            user_id=current_user.id
+        )
+        email_configuration_id = email_config_obj.id
+    
     # Convert the email-specific schema to the generic schema
     generic_data = {
         "identity_type": IdentityTypeEnum.EMAIL,
         "email": identity_in.email,
         "display_name": identity_in.display_name,
-        "email_configuration_id": identity_in.email_configuration_id,
-        "is_default": identity_in.is_default
+        "email_configuration_id": email_configuration_id,
+        "is_default": identity_in.is_default,
+        "is_complete": email_configuration_id is not None  # Mark as complete if has config
     }
     
     return sender_identity_service.create_sender_identity(
@@ -116,10 +121,6 @@ async def create_phone_sender_identity(
     """
     Create a new phone sender identity for the current user.
     
-    This endpoint provides a simplified interface for creating phone identities:
-    - No need to specify identity_type (automatically set to PHONE)
-    - Only relevant fields for phone identities are required
-    
     Required fields:
     - phone_number: Phone number in international format (e.g., +1234567890)
     - display_name: Name shown to recipients
@@ -132,7 +133,8 @@ async def create_phone_sender_identity(
         "identity_type": IdentityTypeEnum.PHONE,
         "phone_number": identity_in.phone_number,
         "display_name": identity_in.display_name,
-        "is_default": identity_in.is_default
+        "is_default": identity_in.is_default,
+        "is_complete": True  # Phone identities are always complete
     }
     
     return sender_identity_service.create_sender_identity(
@@ -187,14 +189,19 @@ async def update_email_sender_identity(
     """
     Update an email sender identity.
     
-    This endpoint provides a simplified interface for updating email identities:
-    - Only relevant fields for email identities are available
-    - Cannot change the identity type (use the generic endpoint for that)
+    You can update an email configuration in two ways:
+    
+    1. Connect to an existing email configuration:
+       - Provide the `email_configuration_id` field
+    
+    2. Create a new email configuration inline:
+       - Provide `email_configuration` object with SMTP details
     
     Available fields to update:
     - email: The email address
     - display_name: Name shown to recipients
-    - email_configuration_id: ID of an email configuration
+    - email_configuration_id: ID of an existing email configuration
+    - email_configuration: Object with new configuration details
     - is_default: Whether this should be the default email identity
     """
     # First, verify this is an email identity
@@ -209,14 +216,27 @@ async def update_email_sender_identity(
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
+    # Check if we need to create an email configuration first
+    email_configuration_id = identity_in.email_configuration_id
+    
+    if identity_in.email_configuration:
+        # Create email configuration inline
+        email_config_obj = email_configuration_service.create_email_configuration(
+            db,
+            obj_in=identity_in.email_configuration.model_dump(),
+            user_id=current_user.id
+        )
+        email_configuration_id = email_config_obj.id
+    
     # Convert the email-specific update schema to the generic update schema
     update_data = {}
     if identity_in.email is not None:
         update_data["email"] = identity_in.email
     if identity_in.display_name is not None:
         update_data["display_name"] = identity_in.display_name
-    if identity_in.email_configuration_id is not None:
-        update_data["email_configuration_id"] = identity_in.email_configuration_id
+    if email_configuration_id is not None:
+        update_data["email_configuration_id"] = email_configuration_id
+        update_data["is_complete"] = True  # Mark as complete when configuration is added
     if identity_in.is_default is not None:
         update_data["is_default"] = identity_in.is_default
     
@@ -236,10 +256,6 @@ async def update_phone_sender_identity(
 ):
     """
     Update a phone sender identity.
-    
-    This endpoint provides a simplified interface for updating phone identities:
-    - Only relevant fields for phone identities are available
-    - Cannot change the identity type (use the generic endpoint for that)
     
     Available fields to update:
     - phone_number: Phone number in international format
@@ -321,40 +337,4 @@ async def set_default_sender_identity(
         db,
         sender_identity_id=identity_id,
         user_id=current_user.id
-    )
-
-@router.get("/email", response_model=List[SenderIdentity])
-async def read_email_sender_identities(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-):
-    """
-    Retrieve all email sender identities for the current user.
-    """
-    return sender_identity_service.get_user_sender_identities(
-        db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        identity_type=IdentityTypeEnum.EMAIL
-    )
-
-@router.get("/phone", response_model=List[SenderIdentity])
-async def read_phone_sender_identities(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[UserModel, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 100,
-):
-    """
-    Retrieve all phone sender identities for the current user.
-    """
-    return sender_identity_service.get_user_sender_identities(
-        db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        identity_type=IdentityTypeEnum.PHONE
     )
