@@ -6,6 +6,7 @@ from enum import Enum
 class IdentityType(str, Enum):
     PHONE = "PHONE"
     EMAIL = "EMAIL"
+    # WHATSAPP option removed - now handled by notification_type instead
 
 class SenderIdentityBase(BaseModel):
     identity_type: IdentityType = Field(
@@ -75,8 +76,74 @@ class SenderIdentityBase(BaseModel):
             raise ValueError("email_configuration_id is required when identity_type is EMAIL")
         return v
 
+# Type-specific base schemas for improved frontend experience
+class EmailSenderIdentityBase(BaseModel):
+    """Base schema for email sender identities with simplified fields"""
+    email: EmailStr = Field(
+        ...,
+        example="support@yourcompany.com",
+        description="Email address for this sender identity"
+    )
+    display_name: str = Field(
+        ..., 
+        min_length=1, 
+        max_length=255,
+        example="Company Support Team",
+        description="Name shown to recipients when sending from this identity"
+    )
+    email_configuration_id: int = Field(
+        ...,
+        example=1,
+        description="ID of the email configuration to use"
+    )
+    is_default: bool = Field(
+        False,
+        example=False,
+        description="Whether this is the default email identity"
+    )
+
+class PhoneSenderIdentityBase(BaseModel):
+    """Base schema for phone sender identities with simplified fields"""
+    phone_number: str = Field(
+        ..., 
+        example="+1234567890",
+        description="Phone number in international format (e.g., +1234567890)"
+    )
+    display_name: str = Field(
+        ..., 
+        min_length=1, 
+        max_length=255,
+        example="Company Support",
+        description="Name shown to recipients when sending from this identity"
+    )
+    is_default: bool = Field(
+        False,
+        example=False,
+        description="Whether this is the default phone identity"
+    )
+    
+    @field_validator('phone_number')
+    @classmethod
+    def validate_phone_format(cls, v: str):
+        if not v.startswith('+'):
+            raise ValueError("Phone number must be in international format starting with '+'")
+            
+        # Simple pattern check: international format with 10-15 digits
+        if not (v.startswith('+') and len(v) >= 10 and len(v) <= 16 and v[1:].isdigit()):
+            raise ValueError("Phone number must contain 10-15 digits in international format (e.g., +1234567890)")
+        
+        return v
+
 class SenderIdentityCreate(SenderIdentityBase):
     """Schema for creating a new sender identity"""
+    pass
+
+class EmailSenderIdentityCreate(EmailSenderIdentityBase):
+    """Schema for creating a new email sender identity"""
+    pass
+
+class PhoneSenderIdentityCreate(PhoneSenderIdentityBase):
+    """Schema for creating a new phone sender identity"""
     pass
 
 class SenderIdentityUpdate(BaseModel):
@@ -94,7 +161,7 @@ class SenderIdentityUpdate(BaseModel):
     phone_number: Optional[str] = Field(
         None,
         example="+1987654321",
-        description="Updated phone number (required if changing to PHONE or WHATSAPP type)"
+        description="Updated phone number (required if changing to PHONE type)"
     )
     display_name: Optional[str] = Field(
         None, 
@@ -146,6 +213,66 @@ class SenderIdentityUpdate(BaseModel):
         identity_type = info.data.get('identity_type')
         if identity_type == IdentityType.EMAIL and v is None:
             raise ValueError("email_configuration_id must be provided when updating to EMAIL type")
+        return v
+
+class EmailSenderIdentityUpdate(BaseModel):
+    """Schema for updating an email sender identity"""
+    email: Optional[EmailStr] = Field(
+        None,
+        example="new-support@yourcompany.com",
+        description="Updated email address"
+    )
+    display_name: Optional[str] = Field(
+        None, 
+        min_length=1, 
+        max_length=255,
+        example="Updated Support Team",
+        description="Updated display name"
+    )
+    email_configuration_id: Optional[int] = Field(
+        None,
+        example=2,
+        description="Updated email configuration ID"
+    )
+    is_default: Optional[bool] = Field(
+        None,
+        example=True,
+        description="Set to true to make this the default email identity"
+    )
+
+class PhoneSenderIdentityUpdate(BaseModel):
+    """Schema for updating a phone sender identity"""
+    phone_number: Optional[str] = Field(
+        None,
+        example="+1987654321",
+        description="Updated phone number"
+    )
+    display_name: Optional[str] = Field(
+        None, 
+        min_length=1, 
+        max_length=255,
+        example="Updated Support Team",
+        description="Updated display name"
+    )
+    is_default: Optional[bool] = Field(
+        None,
+        example=True,
+        description="Set to true to make this the default phone identity"
+    )
+    
+    @field_validator('phone_number')
+    @classmethod
+    def validate_phone_format(cls, v: Optional[str]):
+        if v is None:
+            return v
+            
+        if not v.startswith('+'):
+            raise ValueError("Phone number must be in international format starting with '+'")
+            
+        # Simple pattern check: international format with 10-15 digits
+        if not (v.startswith('+') and len(v) >= 10 and len(v) <= 16 and v[1:].isdigit()):
+            raise ValueError("Phone number must contain 10-15 digits in international format (e.g., +1234567890)")
+        
         return v
 
 class SenderIdentityInDBBase(SenderIdentityBase):
